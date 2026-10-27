@@ -1,0 +1,247 @@
+/* HYDRO INSIGHT — Palet mentor
+ * Simpan sebagai frontend/src/MentorTheme.css.
+ * Import TERAKHIR di App.tsx, setelah App.css dan UnitMonitoring.integration.css:
+ * import './MentorTheme.css';
+ * Tema tambahan: pertahankan seluruh CSS dan komponen yang sudah ada.
+ * Warna solid diambil dari gambar: #14325C, #3CB5E5, #555555, #FFFFFF.
+ * Warna latar/border tambahan adalah turunan netral untuk keterbacaan.
+ */
+
+.dashboard {
+  --mentor-navy: #14325c;
+  --mentor-cyan: #3cb5e5;
+  --mentor-gray: #555555;
+  --mentor-white: #ffffff;
+  --mentor-bg: #f3f6fa;
+  --mentor-border: #d6e0eb;
+  background: var(--mentor-bg);
+  color: var(--mentor-navy);
+}
+
+.dashboard .sidebar { background: #14325c; color: #ffffff; }
+.dashboard .brand { color: #ffffff; }
+.dashboard .brand-symbol { color: #3cb5e5; }
+.dashboard .brand-caption,
+.dashboard .nav-caption,
+.dashboard .sidebar-bottom > small,
+.dashboard .workspace-note p { color: #c9d8eb; }
+.dashboard .nav-item { color: #e0e9f5; }
+.dashboard .nav-item:hover { background: #24466f; }
+.dashboard .nav-item.active {
+  color: #14325c;
+  background: #3cb5e5;
+  box-shadow: inset 3px 0 0 #ffffff;
+}
+.dashboard .nav-index { color: #b8dff0; }
+.dashboard .nav-item.active .nav-index { color: #14325c; }
+.dashboard .workspace-note { background: #24466f; }
+.dashboard .topbar,
+.dashboard .filterbar { background: #ffffff; border-color: #d6e0eb; }
+.dashboard .breadcrumb,
+.dashboard .breadcrumb span,
+.dashboard .profile-text small,
+.dashboard .filterbar label > span,
+.dashboard .connection-status { color: #555555; }
+.dashboard .breadcrumb strong,
+.dashboard .profile-text strong { color: #14325c; }
+.dashboard .avatar { background: #e2f4fc; color: #14325c; }
+.dashboard .filterbar select {
+  color: #14325c;
+  border-color: #bdcddd;
+  background: #ffffff;
+}
+.dashboard .text-button,
+.dashboard .row-action { color: #14325c; }
+.dashboard .text-button:hover { background: #e2f4fc; }
+.dashboard .status-dot { background: #555555; }
+.dashboard .page-heading h1,
+.dashboard .panel-heading h2,
+.dashboard .kpi-card > strong { color: #14325c; }
+.dashboard .page-heading p,
+.dashboard .kpi-card p,
+.dashboard .kpi-card small,
+.dashboard .plant-card small,
+.dashboard .panel-heading p,
+.dashboard .panel-footnote,
+.dashboard .empty-content p,
+.dashboard .alarm-placeholder,
+.dashboard .alarm-placeholder small,
+.dashboard .page-placeholder p,
+.dashboard .muted { color: #555555; }
+.dashboard .kpi-card,
+.dashboard .plant-card,
+.dashboard .panel { background: #ffffff; border-color: #d6e0eb; }
+.dashboard .kpi-card { border-top: 3px solid #3cb5e5; }
+.dashboard .plant-card { color: #14325c; }
+.dashboard .plant-card:hover { background: #edf8fd; border-color: #3cb5e5; }
+.dashboard th { background: #eaf0f7; color: #14325c; }
+.dashboard td { border-color: #d6e0eb; }
+.dashboard tbody tr:nth-child(even) { background: #f7f9fc; }
+.dashboard tbody tr:hover { background: #edf8fd; }
+.dashboard .neutral { background: #edf0f3; color: #555555; }
+.dashboard .empty-icon { background: #e2f4fc; color: #14325c; }
+.dashboard .outline-button { color: #14325c; background: #ffffff; border-color: #9ebad2; }
+.dashboard .outline-button:hover { background: #e2f4fc; border-color: #3cb5e5; }
+.dashboard .chart-grid {
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 38px, #e1e8f0 39px, #e1e8f0 40px);
+}
+.dashboard .chart-placeholder > span { color: #555555; background: #ffffff; }
+.dashboard .information-bar { background: #14325c; color: #ffffff; }
+.dashboard .main-layout > main > footer { color: #555555; }
+.dashboard button:focus-visible,
+.dashboard select:focus-visible,
+.dashboard input:focus-visible,
+.dashboard a:focus-visible { outline: 2px solid #14325c; outline-offset: 3px; }
+.dashboard .sidebar :focus-visible { outline-color: #3cb5e5; }
+
+/* Unit Monitoring — berlaku juga jika komponen dibuka secara mandiri. */
+.main-layout > main.unit-monitoring-page { background: #f3f6fa; }
+.hm-app {
+  --bg: #f3f6fa;
+  --panel: #ffffff;
+  --border: #d6e0eb;
+  --text: #14325c;
+  --muted: #555555;
+  /* Nama variabel lama dipertahankan agar kompatibel dengan komponen. */
+  --green: #14325c;
+  --channel-tgb: #14325c;
+  --channel-ugb: #147ba5;
+  --channel-lgb: #555555;
+  background: var(--bg);
+  color: var(--text);
+  color-scheme: light;
+}
+.hm-app .hm-header {
+  background: #14325c;
+  color: #ffffff;
+  border-bottom: 3px solid #3cb5e5;
+}
+.hm-app .hm-brand { color: #ffffff; }
+.hm-app .hm-brand-mark { background: #24466f; color: #3cb5e5; }
+.hm-app .hm-brand small,
+.hm-app .hm-title p,
+.hm-app .hm-header-controls label,
+.hm-app .hm-time { color: #d5e3f3; }
+.hm-app .hm-title h1,
+.hm-app .hm-time strong { color: #ffffff; }
+.hm-app .hm-header select {
+  background: #ffffff;
+  color: #14325c;
+  border-color: #ffffff;
+}
+.hm-app .hm-toolbar { background: #eaf0f7; color: #555555; }
+.hm-app .hm-tag { background: #edf0f3; color: #555555; }
+/* Badge prototipe, bukan status alarm mesin. */
+.hm-app .hm-tag.amber { background: #e2f4fc; color: #14325c; }
+.hm-app .hm-demo-toggle input { accent-color: #14325c; }
+.hm-app .hm-kpi { border-top: 3px solid #3cb5e5; }
+.hm-app .hm-kpi > div { color: #555555; }
+.hm-app .hm-kpi > strong { color: #14325c; }
+.hm-app .hm-gauge-value { fill: #14325c; }
+.hm-app .hm-svg-label { fill: #555555; }
+.hm-app .hm-bearing-bottom b { color: #14325c; }
+.hm-app .hm-threshold-note { color: #555555; }
+.hm-app .hm-periods { background: #eaf0f7; }
+.hm-app .hm-periods button { color: #555555; }
+.hm-app .hm-periods .is-active { background: #14325c; color: #ffffff; }
+.hm-app .hm-legend button { color: #555555; }
+.hm-app .hm-chart-message { background: #ffffff; color: #555555; }
+.hm-app .hm-snapshots > div { background: #f0f4f8; }
+.hm-app .hm-orbit-grid {
+  background:
+    linear-gradient(transparent 49.6%, #a9b8c9 49.6%, #a9b8c9 50.4%, transparent 50.4%),
+    linear-gradient(90deg, transparent 49.6%, #a9b8c9 49.6%, #a9b8c9 50.4%, transparent 50.4%);
+}
+.hm-app .hm-orbit-grid::after { border-color: #a9b8c9; }
+.hm-app .hm-orbit-body strong,
+.hm-app .hm-empty strong { color: #14325c; }
+.hm-app .hm-empty > span { color: #555555; }
+.hm-app .hm-event-dot { background: #14325c; }
+.hm-app .hm-event-dot.blue { background: #3cb5e5; }
+.hm-app .hm-event-dot.amber { background: #555555; }
+.hm-app .hm-quality strong { color: #555555; }
+.hm-app .hm-footer { color: #555555; }
+.hm-app button:focus-visible,
+.hm-app select:focus-visible,
+.hm-app input:focus-visible,
+.hm-app a:focus-visible { outline: 2px solid #14325c; outline-offset: 3px; }
+.hm-app .hm-header :focus-visible { outline-color: #3cb5e5; }
+
+/* Warna SVG versi integrasi: override atribut tanpa mengubah data JSX. */
+.hm-app [stroke="#2a3949"],
+.hm-app [stroke="#283647"],
+.hm-app [stroke="#22303f"] { stroke: #d6e0eb; }
+.hm-app [stroke="#44dfbd"] { stroke: var(--channel-tgb); }
+.hm-app [fill="#44dfbd"] { fill: var(--channel-tgb); }
+.hm-app [stroke="#47cfee"] { stroke: var(--channel-ugb); }
+.hm-app [fill="#47cfee"] { fill: var(--channel-ugb); }
+.hm-app [stroke="#8e9dff"] { stroke: var(--channel-lgb); }
+.hm-app [fill="#8e9dff"] { fill: var(--channel-lgb); }
+
+/* Urutan kanal komponen: TGB X/Y, UGB X/Y, LGB X/Y.
+ * !important hanya untuk menggantikan warna inline dari komponen lama.
+ * Garis X solid dan Y putus-putus tetap dipertahankan.
+ */
+.hm-app .hm-bearing:nth-child(1) .hm-bearing-title > i { background: var(--channel-tgb) !important; }
+.hm-app .hm-bearing:nth-child(2) .hm-bearing-title > i { background: var(--channel-ugb) !important; }
+.hm-app .hm-bearing:nth-child(3) .hm-bearing-title > i { background: var(--channel-lgb) !important; }
+.hm-app .hm-legend button:nth-child(-n+2) i { border-color: var(--channel-tgb) !important; }
+.hm-app .hm-legend button:nth-child(n+3):nth-child(-n+4) i { border-color: var(--channel-ugb) !important; }
+.hm-app .hm-legend button:nth-child(n+5) i { border-color: var(--channel-lgb) !important; }
+.hm-app .hm-snapshots > div:nth-child(-n+2) > span { color: var(--channel-tgb) !important; }
+.hm-app .hm-snapshots > div:nth-child(n+3):nth-child(-n+4) > span { color: var(--channel-ugb) !important; }
+.hm-app .hm-snapshots > div:nth-child(n+5) > span { color: var(--channel-lgb) !important; }
+
+/* Logo PT Vale Indonesia */
+.dashboard .brand.vale-brand,
+.hm-app .hm-brand.vale-brand {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.vale-logo-plate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #d6e0eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.vale-logo {
+  display: block;
+  width: 144px;
+  height: 64px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.hm-header .vale-logo {
+  width: 132px;
+  height: 58px;
+}
+
+.dashboard .brand-caption {
+  margin-top: 12px;
+}
+
+@media (max-width: 760px) {
+  .vale-logo {
+    width: 120px;
+    height: 54px;
+  }
+
+  .hm-header .vale-logo {
+    width: 110px;
+    height: 50px;
+  }
+
+  .vale-logo-plate {
+    padding: 6px 10px;
+  }
+}

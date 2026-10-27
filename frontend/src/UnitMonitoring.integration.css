@@ -1,0 +1,36 @@
+/* Scoped integration: keep the existing Overview and other pages intact. */
+.main-layout > main.unit-monitoring-page {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  background: #0d141e;
+}
+.unit-monitoring-page .hm-app { min-height: calc(100vh - 64px); }
+.unit-monitoring-page .hm-header { position: static; }
+.unit-monitoring-page .hm-main { max-width: 2100px; }
+.unit-monitoring-page .hm-footer { margin: 0; padding: 14px 0 0; }
+/* Allow the sidebar's width when arranging the embedded page. */
+@media (min-width: 761px) and (max-width: 1560px) {
+  .unit-monitoring-page .hm-header { flex-wrap: wrap; gap: 16px; }
+  .unit-monitoring-page .hm-time { display: none; }
+  .unit-monitoring-page .hm-monitoring:not(.hm-expanded) {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+  .unit-monitoring-page .hm-analysis {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+  }
+  .unit-monitoring-page .hm-snapshots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .unit-monitoring-page .hm-coverage { display: none; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .unit-monitoring-page .hm-title { order: 3; width: 100%; text-align: left; }
+  .unit-monitoring-page .hm-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .unit-monitoring-page .hm-toolbar { flex-wrap: wrap; }
+  .unit-monitoring-page .hm-connection { margin-left: 0; }
+  .unit-monitoring-page .hm-orbit-body { flex-direction: column; align-items: flex-start; }
+  .unit-monitoring-page .hm-activity-grid { grid-template-columns: 1fr 1fr; }
+}
