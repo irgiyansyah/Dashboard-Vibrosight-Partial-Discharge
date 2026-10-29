@@ -25,6 +25,7 @@ const menus = [
 ] as const
 
 type Page = (typeof menus)[number]
+
 type PlantFilter = Plant | 'all'
 
 const plants: Plant[] = ['Larona', 'Karebbe', 'Balambano']
@@ -33,6 +34,83 @@ const capacityReference: Record<Plant, string> = {
   Larona: '3 × 55 MW = 165 MW',
   Karebbe: '2 × 45 MW = 90 MW',
   Balambano: '2 × 55 MW = 110 MW',
+}
+function MenuIcon({ page }: { page: Page }) {
+  const icons = {
+    Overview: (
+      <>
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      </>
+    ),
+
+    'Unit Monitoring': (
+      <>
+        <rect x="3" y="4" width="18" height="13" rx="2" />
+        <path d="M8 21h8M12 17v4" />
+        <path d="M6 11h3l2-4 3 7 2-3h2" />
+      </>
+    ),
+
+    'Vibration Analysis': (
+      <path d="M2 12h3l3-8 4 16 4-12 3 4h3" />
+    ),
+
+    'Partial Discharge': (
+      <path d="m13 2-9 12h7l-1 8 10-12h-7l1-8Z" />
+    ),
+
+    'Alarms & Events': (
+      <>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+        <path d="M10 21h4M12 2V1" />
+      </>
+    ),
+
+    'Historical Data': (
+      <>
+        <path d="M3 11a9 9 0 1 1 2.6 7.4" />
+        <path d="M3 4v7h7" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+
+    Reports: (
+      <>
+        <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" />
+        <path d="M14 3v6h6" />
+        <path d="M8 17v-3M12 17v-5M16 17v-2" />
+      </>
+    ),
+
+    'Data Sources': (
+      <>
+        <ellipse cx="12" cy="5" rx="8" ry="3" />
+        <path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+        <path d="M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" />
+      </>
+    ),
+  };
+
+  return (
+    <svg
+      className="nav-icon"
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {icons[page]}
+    </svg>
+  );
 }
 
 function App() {
@@ -133,21 +211,19 @@ function App() {
         <p className="nav-caption">WORKSPACE</p>
 
         <nav aria-label="Navigasi dashboard">
-          {menus.map((menu, index) => (
-            <button
-              key={menu}
-              type="button"
-              className={`nav-item ${page === menu ? 'active' : ''}`}
-              aria-current={page === menu ? 'page' : undefined}
-              onClick={() => setPage(menu)}
-            >
-              <span className="nav-index">
-                {String(index + 1).padStart(2, '0')}
-              </span>
-              {menu}
-            </button>
-          ))}
-        </nav>
+  {menus.map((menu) => (
+    <button
+      key={menu}
+      type="button"
+      className={`nav-item ${page === menu ? 'active' : ''}`}
+      aria-current={page === menu ? 'page' : undefined}
+      onClick={() => setPage(menu)}
+    >
+      <MenuIcon page={menu} />
+      <span className="nav-label">{menu}</span>
+    </button>
+  ))}
+</nav>
 
         <div className="sidebar-bottom">
           <div className="workspace-note">

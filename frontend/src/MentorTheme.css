@@ -113,6 +113,16 @@
   background: #555555;
 }
 
+/* Hilangkan bar Workspace dan profil */
+.dashboard .main-layout > .topbar {
+  display: none;
+}
+
+/* Sesuaikan tinggi monitoring setelah topbar dihilangkan */
+.dashboard .main-layout > main.unit-monitoring-page .hm-app {
+  min-height: 100vh;
+}
+
 /* =========================================
    OVERVIEW DAN PANEL UMUM
    ========================================= */
@@ -679,4 +689,31 @@
     justify-self: start;
     grid-row: 3;
   }
+  
+  /* Ikon navigasi menggantikan nomor menu */
+.dashboard .sidebar .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dashboard .sidebar .nav-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  color: #b8dff0;
+}
+
+.dashboard .sidebar .nav-label {
+  line-height: 1.4;
+}
+
+.dashboard .sidebar .nav-item:hover .nav-icon {
+  color: #ffffff;
+}
+
+.dashboard .sidebar .nav-item.active .nav-icon {
+  color: #14325c;
+}
 }
