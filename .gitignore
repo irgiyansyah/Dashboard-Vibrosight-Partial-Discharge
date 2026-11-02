@@ -1,0 +1,13 @@
+# Konfigurasi rahasia
+.env
+.env.*
+!.env.example
+
+# Lingkungan dan cache Python
+.venv/
+__pycache__/
+*.pyc
+
+# Dependency dan hasil build frontend
+node_modules/
+dist/

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { hydroUnits } from './data/units'
+import { useEffect, useState } from 'react'
+import { fetchHydroUnits } from './data/units'
 import type { HydroUnit, Plant } from './data/units'
 
 import HistoricalData from './components/HistoricalData'
@@ -25,16 +25,21 @@ const menus = [
 ] as const
 
 type Page = (typeof menus)[number]
-
 type PlantFilter = Plant | 'all'
 
-const plants: Plant[] = ['Larona', 'Karebbe', 'Balambano']
+const plantOrder: Plant[] = [
+  'Larona',
+  'Karebbe',
+  'Balambano',
+]
 
+// Referensi dari kode sebelumnya; bukan hasil pembacaan API.
 const capacityReference: Record<Plant, string> = {
   Larona: '3 × 55 MW = 165 MW',
   Karebbe: '2 × 45 MW = 90 MW',
   Balambano: '2 × 55 MW = 110 MW',
 }
+
 function MenuIcon({ page }: { page: Page }) {
   const icons = {
     Overview: (
@@ -92,7 +97,7 @@ function MenuIcon({ page }: { page: Page }) {
         <path d="M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" />
       </>
     ),
-  };
+  }
 
   return (
     <svg
@@ -110,14 +115,75 @@ function MenuIcon({ page }: { page: Page }) {
     >
       {icons[page]}
     </svg>
-  );
+  )
 }
 
 function App() {
   const [page, setPage] = useState<Page>('Overview')
   const [plant, setPlant] = useState<PlantFilter>('all')
   const [unitId, setUnitId] = useState('all')
+
+  // Data pengukuran masih disimpan selama sesi React.
   const [datasets, setDatasets] = useState<MeasurementFile[]>([])
+
+  // Daftar unit diambil dari backend.
+  const [hydroUnits, setHydroUnits] = useState<HydroUnit[]>([])
+  const [unitsLoading, setUnitsLoading] = useState(true)
+  const [unitsError, setUnitsError] = useState<string | null>(null)
+  const [unitsRequest, setUnitsRequest] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let active = true
+    let timedOut = false
+
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 10000)
+
+    async function loadUnits() {
+      try {
+        const units = await fetchHydroUnits(controller.signal)
+
+        if (!active) return
+
+        setHydroUnits(units)
+      } catch (error: unknown) {
+        if (!active) return
+
+        setHydroUnits([])
+
+        const message = timedOut
+          ? 'Backend tidak merespons dalam 10 detik. Periksa terminal backend.'
+          : error instanceof TypeError
+            ? 'API tidak dapat diakses. Periksa backend dan pengaturan CORS.'
+            : error instanceof Error
+              ? error.message
+              : 'Terjadi kesalahan saat mengambil daftar unit.'
+
+        setUnitsError(message)
+      } finally {
+        window.clearTimeout(timeoutId)
+
+        if (active) {
+          setUnitsLoading(false)
+        }
+      }
+    }
+
+    void loadUnits()
+
+    return () => {
+      active = false
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [unitsRequest])
+
+  const plants = plantOrder.filter((name) =>
+    hydroUnits.some((unit) => unit.plant === name),
+  )
 
   const isHistoricalPage = page === 'Historical Data'
   const isMonitoringPage = page === 'Unit Monitoring'
@@ -130,7 +196,9 @@ function App() {
     (unit) => unitId === 'all' || unit.id === unitId,
   )
 
-  const selectedUnit = hydroUnits.find((unit) => unit.id === unitId)
+  const selectedUnit = hydroUnits.find(
+    (unit) => unit.id === unitId,
+  )
 
   const monitoringUnit =
     selectedUnit ?? availableUnits[0] ?? hydroUnits[0]
@@ -186,6 +254,70 @@ function App() {
     setPage('Historical Data')
   }
 
+  function retryLoadUnits() {
+    setUnitsLoading(true)
+    setUnitsError(null)
+    setUnitsRequest((value) => value + 1)
+  }
+
+  if (unitsLoading) {
+    return (
+      <div className="dashboard">
+        <section
+          className="panel page-placeholder"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <h2>Memuat daftar unit</h2>
+          <p>Mengambil data PLTA dan unit dari backend.</p>
+        </section>
+      </div>
+    )
+  }
+
+  if (unitsError) {
+    return (
+      <div className="dashboard">
+        <section className="panel page-placeholder" role="alert">
+          <h2>Daftar unit belum dapat dimuat</h2>
+          <p>{unitsError}</p>
+
+          <button
+            type="button"
+            className="outline-button"
+            onClick={retryLoadUnits}
+          >
+            Coba lagi
+          </button>
+        </section>
+      </div>
+    )
+  }
+
+  if (hydroUnits.length === 0) {
+    return (
+      <div className="dashboard">
+        <section className="panel page-placeholder">
+          <h2>Belum ada unit terdaftar</h2>
+
+          <p>
+            API berhasil diakses, tetapi daftar unit kosong.
+            Periksa tabel plants dan units di database hydro_insight.
+          </p>
+
+          <button
+            type="button"
+            className="outline-button"
+            onClick={retryLoadUnits}
+          >
+            Muat ulang
+          </button>
+        </section>
+      </div>
+    )
+  }
+
   return (
     <div className="dashboard">
       <aside className="sidebar">
@@ -211,19 +343,19 @@ function App() {
         <p className="nav-caption">WORKSPACE</p>
 
         <nav aria-label="Navigasi dashboard">
-  {menus.map((menu) => (
-    <button
-      key={menu}
-      type="button"
-      className={`nav-item ${page === menu ? 'active' : ''}`}
-      aria-current={page === menu ? 'page' : undefined}
-      onClick={() => setPage(menu)}
-    >
-      <MenuIcon page={menu} />
-      <span className="nav-label">{menu}</span>
-    </button>
-  ))}
-</nav>
+          {menus.map((menu) => (
+            <button
+              key={menu}
+              type="button"
+              className={`nav-item ${page === menu ? 'active' : ''}`}
+              aria-current={page === menu ? 'page' : undefined}
+              onClick={() => setPage(menu)}
+            >
+              <MenuIcon page={menu} />
+              <span className="nav-label">{menu}</span>
+            </button>
+          ))}
+        </nav>
 
         <div className="sidebar-bottom">
           <div className="workspace-note">
@@ -247,7 +379,7 @@ function App() {
                 ? 'Prototipe · bukan live'
                 : loadedUnitIds.size > 0
                   ? 'Historical data'
-                  : 'Belum terhubung'}
+                  : 'Data pengukuran belum dimuat'}
             </span>
 
             <div className="avatar">J</div>
@@ -423,6 +555,7 @@ function App() {
                 <section className="panel">
                   <div className="panel-heading">
                     <h2>Matriks kondisi unit</h2>
+
                     <p>
                       Kondisi mesin dan ketersediaan data ditampilkan
                       terpisah.
@@ -557,8 +690,8 @@ function App() {
               </div>
 
               <div className="information-bar">
-                * Kapasitas terpasang merupakan referensi materi
-                mentor, bukan daya aktual. Monitoring live belum
+                * Kapasitas terpasang merupakan referensi pada
+                dashboard, bukan daya aktual. Monitoring live belum
                 terhubung.
               </div>
             </>
@@ -580,7 +713,8 @@ function App() {
                 <h2>Sumber data historis</h2>
 
                 <p>
-                  File yang dimuat tersedia selama sesi aplikasi.
+                  Daftar unit diambil dari database. File pengukuran
+                  yang dimuat masih tersedia selama sesi aplikasi.
                   Pemetaan unit mengikuti pilihan saat impor.
                 </p>
               </div>
@@ -606,8 +740,12 @@ function App() {
 
                         return (
                           <tr key={dataset.unitId}>
-                            <td>{unit?.plant ?? 'Belum dipetakan'}</td>
-                            <td>{unit?.name ?? dataset.unitId}</td>
+                            <td>
+                              {unit?.plant ?? 'Belum dipetakan'}
+                            </td>
+                            <td>
+                              {unit?.name ?? dataset.unitId}
+                            </td>
                             <td>{dataset.source}</td>
                             <td>{dataset.tags.length}</td>
                             <td>{dataset.rows.length}</td>
@@ -658,10 +796,12 @@ function App() {
 
           {!isMonitoringPage && (
             <footer>
-              <span>PT Vale Indonesia · Hydro assessment dashboard</span>
+              <span>
+                PT Vale Indonesia · Hydro assessment dashboard
+              </span>
 
               <span>
-                {hydroUnits.length} unit terdaftar ·{' '}
+                {hydroUnits.length} unit dari database ·{' '}
                 {loadedUnitIds.size} unit dengan data historis · Live
                 belum terhubung
               </span>
