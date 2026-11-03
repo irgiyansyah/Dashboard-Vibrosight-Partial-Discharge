@@ -1,0 +1,163 @@
+.db-overview {
+  color: #14325c;
+  min-width: 0;
+}
+
+.db-overview .dbo-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.db-overview .dbo-badge {
+  padding: 6px 10px;
+  border-radius: 5px;
+  background: #e0edf7;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.db-overview button {
+  padding: 8px 12px;
+  border: 1px solid #cbdbea;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #14325c;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.db-overview button:hover {
+  background: #edf7fc;
+}
+
+.db-overview button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.db-overview button:focus-visible {
+  outline: 3px solid #3cb5e5;
+  outline-offset: 3px;
+}
+
+.db-overview .dbo-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.db-overview .dbo-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #d6e0eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.db-overview .dbo-card > span {
+  color: #555555;
+  font-size: 12px;
+}
+
+.db-overview .dbo-card > strong {
+  display: block;
+  margin: 8px 0;
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
+.db-overview .dbo-card > small {
+  display: block;
+  color: #617183;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.db-overview .dbo-panel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #d6e0eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.db-overview .dbo-panel h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.db-overview .dbo-panel > p {
+  margin: 8px 0 16px;
+  color: #617183;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.db-overview .dbo-scroll {
+  overflow-x: auto;
+}
+
+.db-overview table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.db-overview th {
+  padding: 12px;
+  background: #edf3f8;
+  color: #425d76;
+  font-size: 11px;
+}
+
+.db-overview td {
+  padding: 13px 12px;
+  border-bottom: 1px solid #e1e8ef;
+  font-size: 12px;
+}
+
+.db-overview .dbo-review,
+.db-overview .dbo-quality {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.db-overview .dbo-review {
+  background: #fff2db;
+  color: #805600;
+}
+
+.db-overview .dbo-quality {
+  background: #edf2f7;
+  color: #52687b;
+}
+
+.db-overview .dbo-panel .dbo-note {
+  margin: 16px 0 0;
+  font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+  .db-overview .dbo-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .db-overview .dbo-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .db-overview .dbo-panel {
+    padding: 12px;
+  }
+}

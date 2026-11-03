@@ -4,8 +4,8 @@ import type { HydroUnit, Plant } from './data/units'
 
 import HistoricalData from './components/HistoricalData'
 import type { MeasurementFile } from './components/HistoricalData'
-import UnitTrend from './components/UnitTrend'
 import HydroMonitoring from './components/HydroMonitoring.jsx'
+import DatabaseOverview from './components/DatabaseOverview'
 
 import valeLogo from './assets/vale-logo.png'
 
@@ -32,13 +32,6 @@ const plantOrder: Plant[] = [
   'Karebbe',
   'Balambano',
 ]
-
-// Referensi dari kode sebelumnya; bukan hasil pembacaan API.
-const capacityReference: Record<Plant, string> = {
-  Larona: '3 × 55 MW = 165 MW',
-  Karebbe: '2 × 45 MW = 90 MW',
-  Balambano: '2 × 55 MW = 110 MW',
-}
 
 function MenuIcon({ page }: { page: Page }) {
   const icons = {
@@ -123,10 +116,12 @@ function App() {
   const [plant, setPlant] = useState<PlantFilter>('all')
   const [unitId, setUnitId] = useState('all')
 
-  // Data pengukuran masih disimpan selama sesi React.
+  // File yang dibuka melalui Historical Data disimpan
+  // selama sesi React.
+  // Overview dan Unit Monitoring membaca pengukuran
+  // melalui API database.
   const [datasets, setDatasets] = useState<MeasurementFile[]>([])
 
-  // Daftar unit diambil dari backend.
   const [hydroUnits, setHydroUnits] = useState<HydroUnit[]>([])
   const [unitsLoading, setUnitsLoading] = useState(true)
   const [unitsError, setUnitsError] = useState<string | null>(null)
@@ -186,7 +181,9 @@ function App() {
   )
 
   const isHistoricalPage = page === 'Historical Data'
-  const isMonitoringPage = page === 'Unit Monitoring'
+  const isMonitoringPage =
+    page === 'Unit Monitoring' ||
+    page === 'Vibration Analysis'
 
   const availableUnits = hydroUnits.filter(
     (unit) => plant === 'all' || unit.plant === plant,
@@ -207,23 +204,12 @@ function App() {
     ? `${selectedUnit.plant} · ${selectedUnit.name}`
     : undefined
 
-  const selectedDataset = datasets.find(
-    (dataset) => dataset.unitId === unitId,
-  )
-
-  const visiblePlants = plants.filter((name) =>
-    visibleUnits.some((unit) => unit.plant === name),
-  )
 
   const loadedUnitIds = new Set(
     datasets
       .filter((dataset) => dataset.rows.length > 0)
       .map((dataset) => dataset.unitId),
   )
-
-  const loadedVisibleUnits = visibleUnits.filter((unit) =>
-    loadedUnitIds.has(unit.id),
-  ).length
 
   function changeMonitoringUnit(id: string) {
     const unit = hydroUnits.find((item) => item.id === id)
@@ -279,7 +265,10 @@ function App() {
   if (unitsError) {
     return (
       <div className="dashboard">
-        <section className="panel page-placeholder" role="alert">
+        <section
+          className="panel page-placeholder"
+          role="alert"
+        >
           <h2>Daftar unit belum dapat dimuat</h2>
           <p>{unitsError}</p>
 
@@ -303,7 +292,8 @@ function App() {
 
           <p>
             API berhasil diakses, tetapi daftar unit kosong.
-            Periksa tabel plants dan units di database hydro_insight.
+            Periksa tabel plants dan units di database
+            hydro_insight.
           </p>
 
           <button
@@ -339,7 +329,10 @@ function App() {
           </span>
         </a>
 
-        <p className="brand-caption">Hydro Condition Monitoring</p>
+        <p className="brand-caption">
+          Hydro Condition Monitoring
+        </p>
+
         <p className="nav-caption">WORKSPACE</p>
 
         <nav aria-label="Navigasi dashboard">
@@ -347,8 +340,12 @@ function App() {
             <button
               key={menu}
               type="button"
-              className={`nav-item ${page === menu ? 'active' : ''}`}
-              aria-current={page === menu ? 'page' : undefined}
+              className={`nav-item ${
+                page === menu ? 'active' : ''
+              }`}
+              aria-current={
+                page === menu ? 'page' : undefined
+              }
               onClick={() => setPage(menu)}
             >
               <MenuIcon page={menu} />
@@ -375,11 +372,7 @@ function App() {
 
           <div className="profile">
             <span className="badge neutral">
-              {isMonitoringPage
-                ? 'Prototipe · bukan live'
-                : loadedUnitIds.size > 0
-                  ? 'Historical data'
-                  : 'Data pengukuran belum dimuat'}
+              Historis · bukan live
             </span>
 
             <div className="avatar">J</div>
@@ -392,14 +385,19 @@ function App() {
         </header>
 
         {!isHistoricalPage && !isMonitoringPage && (
-          <section className="filterbar" aria-label="Filter monitoring">
+          <section
+            className="filterbar"
+            aria-label="Filter monitoring"
+          >
             <label>
               <span>PLTA</span>
 
               <select
                 value={plant}
                 onChange={(event) =>
-                  changePlant(event.target.value as PlantFilter)
+                  changePlant(
+                    event.target.value as PlantFilter,
+                  )
                 }
               >
                 <option value="all">Semua PLTA</option>
@@ -417,7 +415,9 @@ function App() {
 
               <select
                 value={unitId}
-                onChange={(event) => setUnitId(event.target.value)}
+                onChange={(event) =>
+                  setUnitId(event.target.value)
+                }
               >
                 <option value="all">Semua unit</option>
 
@@ -439,17 +439,20 @@ function App() {
 
             <div className="connection-status">
               <span className="status-dot" />
-
-              {loadedVisibleUnits > 0
-                ? `${loadedVisibleUnits} unit memiliki data historis`
-                : 'Data pengukuran belum dimuat'}
+              Data historis · live belum terhubung
             </div>
           </section>
         )}
 
-        <main
+                <main
           className={
-            isMonitoringPage ? 'unit-monitoring-page' : undefined
+            isMonitoringPage
+              ? `unit-monitoring-page${
+                  page === 'Vibration Analysis'
+                    ? ' vibration-analysis-page'
+                    : ''
+                }`
+              : undefined
           }
         >
           {!isMonitoringPage && (
@@ -459,7 +462,7 @@ function App() {
 
                 <p>
                   {isHistoricalPage
-                    ? 'Impor dan eksplorasi file pengukuran Hydro Operation.'
+                    ? 'Eksplorasi file pengukuran dalam sesi browser.'
                     : selectedUnitLabel
                       ? selectedUnitLabel
                       : plant === 'all'
@@ -470,7 +473,7 @@ function App() {
 
               <span className="badge neutral">
                 {isHistoricalPage
-                  ? `${loadedUnitIds.size} unit dengan data historis`
+                  ? `${loadedUnitIds.size} unit dengan file dalam sesi`
                   : `${visibleUnits.length} dari ${hydroUnits.length} unit`}
               </span>
             </div>
@@ -489,233 +492,26 @@ function App() {
               onUnitChange={changeMonitoringUnit}
             />
           ) : page === 'Overview' ? (
-            <>
-              <section
-                className="kpi-grid"
-                aria-label="Ringkasan monitoring"
-              >
-                <Kpi
-                  title="Unit beroperasi"
-                  value={`— / ${visibleUnits.length}`}
-                  note="Status operasi belum tersedia"
-                />
-
-                <Kpi
-                  title="Daya aktual"
-                  value="— MW"
-                  note="Menunggu data beban"
-                />
-
-                <Kpi
-                  title="Perlu perhatian"
-                  value="—"
-                  note="Belum dapat dievaluasi"
-                />
-
-                <Kpi
-                  title="Alarm aktif"
-                  value="—"
-                  note="Sumber alarm belum tersedia"
-                />
-
-                <Kpi
-                  title="Data historis tersedia"
-                  value={`${loadedVisibleUnits} / ${visibleUnits.length}`}
-                  note="Unit dengan pengukuran dimuat"
-                />
-              </section>
-
-              <section
-                className="plant-grid"
-                aria-label="Ringkasan PLTA"
-              >
-                {visiblePlants.map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className="plant-card"
-                    onClick={() => changePlant(name)}
-                  >
-                    <div>
-                      <strong>{name}</strong>
-                      <small>
-                        {capacityReference[name]} terpasang*
-                      </small>
-                    </div>
-
-                    <div className="plant-value">
-                      <strong>— MW</strong>
-                      <small>Daya aktual belum tersedia</small>
-                    </div>
-                  </button>
-                ))}
-              </section>
-
-              <div className="monitoring-grid">
-                <section className="panel">
-                  <div className="panel-heading">
-                    <h2>Matriks kondisi unit</h2>
-
-                    <p>
-                      Kondisi mesin dan ketersediaan data ditampilkan
-                      terpisah.
-                    </p>
-                  </div>
-
-                  <div className="table-scroll">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>PLTA</th>
-                          <th>Unit</th>
-                          <th>Operasi</th>
-                          <th>MW</th>
-                          <th>Vibration</th>
-                          <th>PD</th>
-                          <th>Data</th>
-                          <th>
-                            <span className="sr-only">Detail</span>
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {visibleUnits.map((unit) => {
-                          const dataset = datasets.find(
-                            (item) => item.unitId === unit.id,
-                          )
-
-                          return (
-                            <tr key={unit.id}>
-                              <td>{unit.plant}</td>
-
-                              <td>
-                                <strong>{unit.name}</strong>
-                              </td>
-
-                              <td>Belum diketahui</td>
-                              <td>—</td>
-
-                              <td>
-                                <span className="badge neutral">
-                                  Belum dievaluasi
-                                </span>
-                              </td>
-
-                              <td>
-                                <span className="badge neutral">
-                                  Belum dievaluasi
-                                </span>
-                              </td>
-
-                              <td className="muted">
-                                {dataset && dataset.rows.length > 0
-                                  ? `Historis · ${dataset.tags.length} kanal`
-                                  : 'Belum tersedia'}
-                              </td>
-
-                              <td>
-                                <button
-                                  type="button"
-                                  className="row-action"
-                                  aria-label={`Buka ${unit.plant} ${unit.name}`}
-                                  onClick={() => openUnit(unit)}
-                                >
-                                  ↗
-                                </button>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="panel-footnote">
-                    Data historis yang dimuat tidak menunjukkan koneksi
-                    live. Status operasi dan kondisi mesin belum dapat
-                    ditentukan.
-                  </div>
-                </section>
-
-                <section className="panel review-panel">
-                  <div className="panel-heading">
-                    <h2>Perlu ditinjau</h2>
-                  </div>
-
-                  <div className="empty-content">
-                    <span className="empty-icon">i</span>
-                    <h3>Evaluasi belum tersedia</h3>
-
-                    <p>
-                      Metadata pengukuran dan batas alarm resmi
-                      diperlukan untuk menentukan unit yang memerlukan
-                      perhatian.
-                    </p>
-
-                    <button
-                      type="button"
-                      className="outline-button"
-                      onClick={() => setPage('Data Sources')}
-                    >
-                      Lihat kebutuhan data
-                    </button>
-                  </div>
-                </section>
-              </div>
-
-              <div className="bottom-grid">
-                <UnitTrend
-                  key={unitId}
-                  dataset={selectedDataset}
-                  unitLabel={selectedUnitLabel}
-                  onOpenHistorical={openHistorical}
-                />
-
-                <section className="panel">
-                  <div className="panel-heading">
-                    <h2>Alarm terbaru</h2>
-                    <p>Riwayat kejadian dari sistem sumber.</p>
-                  </div>
-
-                  <div className="alarm-placeholder">
-                    Sumber alarm belum terhubung.
-
-                    <small>
-                      Data getaran yang telah dimuat belum memiliki
-                      batas alarm resmi untuk menentukan status kondisi.
-                    </small>
-                  </div>
-                </section>
-              </div>
-
-              <div className="information-bar">
-                * Kapasitas terpasang merupakan referensi pada
-                dashboard, bukan daya aktual. Monitoring live belum
-                terhubung.
-              </div>
-            </>
-          ) : page === 'Historical Data' ? (
+            <DatabaseOverview
+              units={visibleUnits}
+              onOpenUnit={openUnit}
+            />
+                    ) : page === 'Historical Data' ? (
             <HistoricalData
               datasets={datasets}
               onChange={setDatasets}
             />
-          ) : page === 'Vibration Analysis' ? (
-            <UnitTrend
-              key={unitId}
-              dataset={selectedDataset}
-              unitLabel={selectedUnitLabel}
-              onOpenHistorical={openHistorical}
-            />
           ) : page === 'Data Sources' ? (
+            
             <section className="panel">
               <div className="panel-heading">
-                <h2>Sumber data historis</h2>
+                <h2>File dalam sesi browser</h2>
 
                 <p>
-                  Daftar unit diambil dari database. File pengukuran
-                  yang dimuat masih tersedia selama sesi aplikasi.
-                  Pemetaan unit mengikuti pilihan saat impor.
+                  Overview dan Unit Monitoring membaca data
+                  dari database. Daftar di bawah hanya
+                  menunjukkan file yang dibuka melalui
+                  Historical Data dalam sesi browser ini.
                 </p>
               </div>
 
@@ -735,17 +531,22 @@ function App() {
                     <tbody>
                       {datasets.map((dataset) => {
                         const unit = hydroUnits.find(
-                          (item) => item.id === dataset.unitId,
+                          (item) =>
+                            item.id === dataset.unitId,
                         )
 
                         return (
                           <tr key={dataset.unitId}>
                             <td>
-                              {unit?.plant ?? 'Belum dipetakan'}
+                              {unit?.plant ??
+                                'Belum dipetakan'}
                             </td>
+
                             <td>
-                              {unit?.name ?? dataset.unitId}
+                              {unit?.name ??
+                                dataset.unitId}
                             </td>
+
                             <td>{dataset.source}</td>
                             <td>{dataset.tags.length}</td>
                             <td>{dataset.rows.length}</td>
@@ -757,7 +558,12 @@ function App() {
                 </div>
               ) : (
                 <div className="empty-content">
-                  <p>Belum ada file pengukuran yang diimpor.</p>
+                  <p>
+                    Belum ada file yang dibuka dalam sesi
+                    browser ini. Data di database tetap
+                    dapat dilihat melalui Overview dan
+                    Unit Monitoring.
+                  </p>
                 </div>
               )}
 
@@ -772,10 +578,11 @@ function App() {
               </div>
 
               <div className="panel-footnote">
-                Metadata yang masih diperlukan: satuan per tag,
-                definisi pengukuran, format tanggal, timezone,
-                pemetaan sensor, dan batas alarm resmi. Data PD
-                serta koneksi live belum tersedia.
+                Metadata yang masih diperlukan: satuan per
+                tag, definisi pengukuran, format tanggal,
+                timezone, pemetaan sensor, dan batas alarm
+                resmi. Data PD serta koneksi live belum
+                tersedia.
               </div>
             </section>
           ) : (
@@ -797,37 +604,19 @@ function App() {
           {!isMonitoringPage && (
             <footer>
               <span>
-                PT Vale Indonesia · Hydro assessment dashboard
+                PT Vale Indonesia · Hydro assessment
+                dashboard
               </span>
 
               <span>
                 {hydroUnits.length} unit dari database ·{' '}
-                {loadedUnitIds.size} unit dengan data historis · Live
-                belum terhubung
+                Data historis · Live belum terhubung
               </span>
             </footer>
           )}
         </main>
       </div>
     </div>
-  )
-}
-
-function Kpi({
-  title,
-  value,
-  note,
-}: {
-  title: string
-  value: string
-  note: string
-}) {
-  return (
-    <article className="kpi-card">
-      <p>{title}</p>
-      <strong>{value}</strong>
-      <small>{note}</small>
-    </article>
   )
 }
 

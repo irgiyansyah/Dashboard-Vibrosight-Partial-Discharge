@@ -1,6 +1,19 @@
-import React, { useMemo, useState } from 'react';
-import valeLogo from '../assets/vale-logo.png';
+import { useEffect, useState } from 'react';
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+
 import './HydroMonitoring.css';
+
+const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+).replace(/\/$/, '');
 
 const UNITS = [
   ['LRN-01', 'Larona', 1],
@@ -12,333 +25,668 @@ const UNITS = [
   ['BLB-02', 'Balambano', 2],
 ];
 
-const CHANNELS = [
-  {
-    id: 'TGB-X',
-    label: 'TGB X',
-    color: '#14325c',
-    base: 48,
-  },
-  {
-    id: 'TGB-Y',
-    label: 'TGB Y',
-    color: '#14325c',
-    base: 41,
-    dashed: true,
-  },
-  {
-    id: 'UGB-X',
-    label: 'UGB X',
-    color: '#147ba5',
-    base: 36,
-  },
-  {
-    id: 'UGB-Y',
-    label: 'UGB Y',
-    color: '#147ba5',
-    base: 30,
-    dashed: true,
-  },
-  {
-    id: 'LGB-X',
-    label: 'LGB X',
-    color: '#555555',
-    base: 27,
-  },
-  {
-    id: 'LGB-Y',
-    label: 'LGB Y',
-    color: '#555555',
-    base: 23,
-    dashed: true,
-  },
+const PENDING_PARAMETERS = [
+  ['Daya aktif', 'MW'],
+  ['Daya reaktif', 'MVAr'],
+  ['Voltage', 'Tegangan'],
+  ['Current / Arus', 'Arus generator'],
+  ['Gap', 'Definisi gap perlu dikonfirmasi'],
+  ['Wicket Gate Position', 'Posisi bukaan'],
 ];
 
-const BEARINGS = [
-  'Turbine Guide Bearing',
-  'Upper Guide Bearing',
-  'Lower Guide Bearing',
-];
-
-// Data sintetis untuk pengembangan UI.
-// Tidak menggunakan data perusahaan atau koneksi live.
-const DEMO_END = Date.parse('2026-10-25T14:30:00+08:00');
-
-function formatTime(timestamp, withDate = false) {
-  return new Intl.DateTimeFormat('id-ID', {
-    timeZone: 'Asia/Makassar',
-    ...(withDate
-      ? {
-          day: '2-digit',
-          month: 'short',
-        }
-      : {}),
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(timestamp));
+function number(value) {
+  return Number.isFinite(value)
+    ? new Intl.NumberFormat('id-ID', {
+        maximumFractionDigits: 2,
+      }).format(value)
+    : '—';
 }
 
-function formatValue(value) {
-  return Number.isFinite(value) ? value.toFixed(1) : '—';
+function time(value) {
+  return value
+    ? String(value).replace('T', ' ').slice(0, 19)
+    : '—';
 }
 
-function getUnitLabel(unit) {
+function unitName(unit) {
   return typeof unit[2] === 'number'
     ? `Unit ${unit[2]}`
     : unit[2];
 }
 
-function createDemoData(unitIndex) {
-  return Array.from({ length: 289 }, (_, index) => ({
-    timestamp: DEMO_END - (288 - index) * 300000,
-    values: Object.fromEntries(
-      CHANNELS.map((channel, channelIndex) => [
-        channel.id,
-        channel.base +
-          unitIndex * 1.7 +
-          4 * Math.sin(index / 13 + channelIndex) +
-          1.8 * Math.sin(index * 1.3 + channelIndex) +
-          11 * Math.exp(-(((index - 218) / 11) ** 2)),
-      ]),
-    ),
-  }));
+function label(parameter) {
+  return parameter.display_name || parameter.tag_name;
 }
 
-function Tag({ children, tone = '' }) {
+// Pengelompokan sementara berdasarkan tag.
+// Ini bukan verifikasi satuan atau lokasi sensor.
+function category(parameter) {
+  if (parameter.measurement_type === 'vibration') {
+    return 'vibration';
+  }
+
+  if (parameter.measurement_type === 'temperature') {
+    return 'temperature';
+  }
+
+  const tag = parameter.tag_name || '';
+
+  if (/VIB/i.test(tag)) return 'vibration';
+  if (/TEMP|TMP|TGB-Pad|_TE_/i.test(tag)) return 'temperature';
+  if (/SPEED/i.test(tag)) return 'speed';
+
+  return 'other';
+}
+
+function nextDay(day) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return '';
+
+  // UTC hanya untuk menghitung tanggal berikutnya.
+  // Waktu pengukuran tidak dikonversi.
+  const date = new Date(`${day}T00:00:00Z`);
+
+  if (!Number.isFinite(date.getTime())) return '';
+
+  date.setUTCDate(date.getUTCDate() + 1);
+
+  return date.toISOString().slice(0, 10);
+}
+
+function secondsOfDay(value) {
+  const parts = String(value)
+    .slice(11)
+    .split(':')
+    .map(Number);
+
+  return parts[0] * 3600 + parts[1] * 60 + parts[2];
+}
+
+function clock(value) {
+  const seconds = Math.max(0, Math.floor(Number(value)));
+
+  const hours = String(
+    Math.floor(seconds / 3600),
+  ).padStart(2, '0');
+
+  const minutes = String(
+    Math.floor((seconds % 3600) / 60),
+  ).padStart(2, '0');
+
+  return `${hours}:${minutes}`;
+}
+
+function useApi(path, revision = 0) {
+  const key = `${path}|${revision}`;
+
+  const [state, setState] = useState({
+    key: '',
+    value: null,
+    error: '',
+  });
+
+  useEffect(() => {
+    if (!path) return;
+
+    const controller = new AbortController();
+    let active = true;
+    let timedOut = false;
+
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 20000);
+
+    async function load() {
+      try {
+        const response = await fetch(`${API_BASE}${path}`, {
+          signal: controller.signal,
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `API merespons HTTP ${response.status}.`,
+          );
+        }
+
+        const value = await response.json();
+
+        if (
+          value.status !== 'ok' ||
+          !Array.isArray(value.data)
+        ) {
+          throw new Error('Format respons API tidak sesuai.');
+        }
+
+        if (active) {
+          setState({
+            key,
+            value,
+            error: '',
+          });
+        }
+      } catch (error) {
+        if (!active) return;
+
+        setState({
+          key,
+          value: null,
+          error: timedOut
+            ? 'Permintaan melebihi 20 detik. Coba muat ulang.'
+            : error instanceof Error
+              ? error.message
+              : 'Gagal membaca API.',
+        });
+      } finally {
+        window.clearTimeout(timer);
+      }
+    }
+
+    void load();
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [path, key]);
+
+  const current = state.key === key;
+
+  return {
+    loading: Boolean(path) && !current,
+    value: current ? state.value : null,
+    error: current ? state.error : '',
+  };
+}
+
+function Metric({ title, value, detail }) {
   return (
-    <span className={`hm-tag ${tone}`}>
-      <i aria-hidden="true" />
-      {children}
-    </span>
+    <article className="hml-metric">
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </article>
   );
 }
 
-function Empty({ title, children }) {
-  return (
-    <div className="hm-empty">
-      <span aria-hidden="true">—</span>
-      <strong>{title}</strong>
-      <p>{children}</p>
-    </div>
-  );
-}
+function Reading({ parameter, onSelect, selected }) {
+  const value =
+    parameter.latest_quality === 'unverified'
+      ? parameter.latest_plot_value
+      : null;
 
-function Gauge({
-  channel,
-  value,
-  second,
-  index,
-  hasData,
-}) {
-  const arcLength = Math.PI * 82;
-
-  const ratio =
-    hasData && Number.isFinite(value)
-      ? Math.max(0, Math.min(value / 100, 1))
-      : 0;
+  const quality =
+    {
+      unverified: 'Belum diverifikasi',
+      suspect: 'Perlu ditinjau',
+      missing: 'Data kosong',
+      invalid: 'Data tidak valid',
+    }[parameter.latest_quality] || 'Belum ada data';
 
   return (
-    <section className="hm-panel hm-bearing">
-      <div className="hm-bearing-title">
-        <h2>
-          {BEARINGS[index]}{' '}
-          <span>({channel.label.slice(0, 3)})</span>
-        </h2>
+    <article
+      className={`hml-reading ${
+        selected ? 'is-selected' : ''
+      }`}
+    >
+      <div className="hml-reading-head">
+        <strong>{label(parameter)}</strong>
 
-        <i
-          aria-hidden="true"
-          style={{ background: channel.color }}
-        />
-      </div>
-
-      <svg
-        viewBox="0 0 210 124"
-        role="img"
-        aria-label={`${channel.label}: ${formatValue(
-          value,
-        )} mikrometer peak-to-peak, ${
-          hasData ? 'data demo' : 'belum ada data'
-        }`}
-      >
-        <path
-          d="M23 101 A82 82 0 0 1 187 101"
-          fill="none"
-          stroke="#d6e0eb"
-          strokeWidth="8"
-        />
-
-        {hasData && (
-          <path
-            d="M23 101 A82 82 0 0 1 187 101"
-            fill="none"
-            stroke={channel.color}
-            strokeWidth="8"
-            pathLength={arcLength}
-            strokeDasharray={`${arcLength * ratio} ${arcLength}`}
-          />
+        {onSelect && (
+          <button
+            type="button"
+            onClick={onSelect}
+            aria-pressed={selected}
+          >
+            Lihat tren
+          </button>
         )}
-
-        <text
-          x="105"
-          y="82"
-          textAnchor="middle"
-          className="hm-gauge-value"
-        >
-          {formatValue(value)}
-        </text>
-
-        <text
-          x="105"
-          y="101"
-          textAnchor="middle"
-          className="hm-svg-label"
-        >
-          µm p-p · X
-        </text>
-
-        <text x="20" y="122" className="hm-svg-label">
-          0
-        </text>
-
-        <text x="177" y="122" className="hm-svg-label">
-          100
-        </text>
-      </svg>
-
-      <div className="hm-bearing-bottom">
-        <span>
-          Y <b>{formatValue(second)}</b> µm p-p
-        </span>
-        <span>Skala demo</span>
       </div>
 
-      <p className="hm-threshold-note">
-        Batas kondisi belum dikonfigurasi
+      <p className="hml-reading-value">
+        {number(value)}
       </p>
+
+      <small>
+        {parameter.engineering_unit ||
+          'Satuan belum dikonfirmasi'}
+      </small>
+
+      <p className="hml-muted">
+        {quality} · {time(parameter.latest_time)}
+      </p>
+    </article>
+  );
+}
+
+function History({ parameter, revision }) {
+  const [chosenDay, setChosenDay] = useState('');
+  const [retry, setRetry] = useState(0);
+
+  const day =
+    chosenDay ||
+    parameter.latest_time?.slice(0, 10) ||
+    '';
+
+  const end = nextDay(day);
+
+  const query = new URLSearchParams({
+    start: `${day}T00:00:00`,
+    end: `${end}T00:00:00`,
+    limit: '5000',
+    include_suspect: 'false',
+  });
+
+  const path =
+    day && end
+      ? `/api/parameters/${parameter.channel_id}/history?${query}`
+      : '';
+
+  const { loading, value, error } = useApi(
+    path,
+    `${revision}:${retry}`,
+  );
+
+  const summary = value?.analysis?.summary;
+  const truncated = value?.pagination?.has_more === true;
+
+  const rows = (value?.data || []).map((row) => ({
+    ...row,
+    clock: secondsOfDay(row.measured_at),
+    plotted:
+      row.quality === 'unverified' &&
+      Number.isFinite(row.plot_value)
+        ? row.plot_value
+        : null,
+  }));
+
+  const hasPlot = rows.some(
+    (row) => row.plotted !== null,
+  );
+
+  const engineeringUnit =
+    parameter.engineering_unit ||
+    'satuan belum dikonfirmasi';
+
+  return (
+    <section className="hml-panel hml-history">
+      <div className="hml-section-head">
+        <div>
+          <h2>Tren & analisis getaran</h2>
+          <p>{label(parameter)}</p>
+        </div>
+
+        <label className="hml-field">
+          Tanggal data
+
+          <input
+            type="date"
+            value={day}
+            onChange={(event) =>
+              setChosenDay(event.target.value)
+            }
+          />
+        </label>
+      </div>
+
+      <p className="hml-note">
+        Rentang satu hari, pukul 00:00 sampai sebelum
+        00:00 hari berikutnya. Waktu mengikuti file
+        sumber; zona waktu belum dikonfirmasi.
+      </p>
+
+      {loading && (
+        <p className="hml-message" role="status">
+          Memuat riwayat pengukuran…
+        </p>
+      )}
+
+      {error && (
+        <div className="hml-message" role="alert">
+          <p>{error}</p>
+
+          <button
+            type="button"
+            onClick={() =>
+              setRetry((value) => value + 1)
+            }
+          >
+            Coba lagi
+          </button>
+        </div>
+      )}
+
+      {!path && (
+        <p className="hml-message">
+          Belum ada tanggal pengukuran untuk parameter ini.
+        </p>
+      )}
+
+      {value && !summary && (
+        <p role="alert">
+          Ringkasan analisis tidak ditemukan pada respons API.
+        </p>
+      )}
+
+      {summary && (
+        <>
+          <div className="hml-stats">
+            <Metric
+              title="Minimum"
+              value={number(summary.minimum)}
+              detail={time(summary.minimum_time)}
+            />
+
+            <Metric
+              title="Maksimum"
+              value={number(summary.maximum)}
+              detail={time(summary.maximum_time)}
+            />
+
+            <Metric
+              title="Rata-rata"
+              value={number(summary.average)}
+              detail={engineeringUnit}
+            />
+          </div>
+
+          <p className="hml-note">
+            Nilai pengukuran · {engineeringUnit}
+          </p>
+
+          {truncated ? (
+            <p className="hml-message">
+              Riwayat melebihi 5.000 titik. Grafik tidak
+              ditampilkan agar tidak memberi kesan seluruh
+              hari sudah tergambar. Ringkasan di atas tetap
+              mencakup seluruh hari dari API.
+            </p>
+          ) : hasPlot ? (
+            <div
+              className="hml-chart"
+              role="img"
+              aria-label={`Grafik harian ${label(parameter)}`}
+            >
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+                <LineChart
+                  data={rows}
+                  margin={{
+                    top: 16,
+                    right: 20,
+                    bottom: 8,
+                    left: 0,
+                  }}
+                >
+                  <CartesianGrid
+                    stroke="#d6e0eb"
+                    strokeDasharray="3 3"
+                  />
+
+                  <XAxis
+                    dataKey="clock"
+                    type="number"
+                    domain={[0, 86400]}
+                    ticks={[
+                      0,
+                      21600,
+                      43200,
+                      64800,
+                      86400,
+                    ]}
+                    tickFormatter={clock}
+                  />
+
+                  <YAxis
+                    domain={['auto', 'auto']}
+                    width={65}
+                    tickFormatter={number}
+                  />
+
+                  <Tooltip
+                    labelFormatter={clock}
+                    formatter={(value) => [
+                      number(value),
+                      'Nilai pengukuran',
+                    ]}
+                  />
+
+                  <Line
+                    type="linear"
+                    dataKey="plotted"
+                    stroke="#147ba5"
+                    strokeWidth={1.7}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="hml-message">
+              {summary.total_count === 0
+                ? 'Tidak ada pengukuran pada tanggal ini.'
+                : 'Tidak ada nilai yang dapat diplot setelah penyaringan kualitas.'}
+            </p>
+          )}
+
+          <p className="hml-note">
+            Dianalisis: {number(summary.analyzed_count)} dari{' '}
+            {number(summary.total_count)} pengukuran.
+            {' '}Dikecualikan: {number(summary.excluded_count)}.
+            {' '}Data berstatus unverified masih memerlukan
+            verifikasi.
+          </p>
+
+          <div className="hml-notice">
+            Batas kondisi belum ditetapkan. Nilai 300 / 400
+            dan rentang 50–200 belum digunakan untuk penilaian
+            sampai satuan, definisi amplitudo, serta cakupan
+            parameternya dikonfirmasi mentor.
+          </div>
+        </>
+      )}
     </section>
   );
 }
 
-function Trend({ rows, visible }) {
-  if (!rows.length) {
-    return (
-      <Empty title="Belum ada data pengukuran">
-        Koneksi VibroSight belum tersedia.
-      </Empty>
-    );
-  }
+function UnitData({ unitId }) {
+  const [revision, setRevision] = useState(0);
+  const [selectedId, setSelectedId] = useState(null);
 
-  const width = 840;
-  const height = 310;
-  const left = 42;
-  const right = 18;
-  const top = 16;
-  const bottom = 34;
-  const lastRow = rows[rows.length - 1];
+  const { loading, value, error } = useApi(
+    `/api/units/${encodeURIComponent(unitId)}/parameters`,
+    revision,
+  );
 
-  const x = (index) =>
-    left +
-    (index / Math.max(1, rows.length - 1)) *
-      (width - left - right);
+  const parameters = value?.data || [];
 
-  const y = (value) =>
-    top + (1 - value / 100) * (height - top - bottom);
+  const vibrations = parameters.filter(
+    (item) => category(item) === 'vibration',
+  );
+
+  const temperatures = parameters.filter(
+    (item) => category(item) === 'temperature',
+  );
+
+  const speeds = parameters.filter(
+    (item) => category(item) === 'speed',
+  );
+
+  const selected =
+    vibrations.find(
+      (item) => item.channel_id === selectedId,
+    ) || vibrations[0];
+
+  const latest = parameters
+    .map((item) => item.latest_time)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
 
   return (
-    <svg
-      className="hm-trend-svg"
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label="Tren getaran sintetis dalam mikrometer peak-to-peak. Gunakan legenda untuk memilih kanal."
-    >
-      {[0, 25, 50, 75, 100].map((value) => (
-        <g key={value}>
-          <line
-            x1={left}
-            x2={width - right}
-            y1={y(value)}
-            y2={y(value)}
-            stroke="#d6e0eb"
-          />
+    <div className="hml-body">
+      <div className="hml-statusbar">
+        <span className="hml-badge">
+          HISTORIS · BUKAN LIVE
+        </span>
 
-          <text
-            x={left - 9}
-            y={y(value) + 4}
-            textAnchor="end"
-            className="hm-svg-label"
+        <span>
+          Waktu data terakhir: {time(latest)}
+        </span>
+
+        <button
+          type="button"
+          onClick={() =>
+            setRevision((value) => value + 1)
+          }
+          disabled={loading}
+        >
+          Muat ulang data
+        </button>
+      </div>
+
+      {loading && (
+        <p className="hml-message" role="status">
+          Membaca data unit dari database…
+        </p>
+      )}
+
+      {error && (
+        <p className="hml-message" role="alert">
+          {error} Periksa backend dan layanan database.
+        </p>
+      )}
+
+      {value && (
+        <>
+          {!value.has_data && (
+            <p className="hml-message">
+              Belum ada pengukuran tersimpan untuk unit ini.
+            </p>
+          )}
+
+          <section
+            className="hml-operations"
+            aria-label="Parameter operasi"
           >
-            {value}
-          </text>
-        </g>
-      ))}
+            {PENDING_PARAMETERS.map(([title, detail]) => (
+              <Metric
+                key={title}
+                title={title}
+                value="—"
+                detail={`${detail} · belum tersedia`}
+              />
+            ))}
+          </section>
 
-      {[0, 1, 2, 3, 4, 5, 6].map((tick) => {
-        const index = Math.round(
-          ((rows.length - 1) * tick) / 6,
-        );
+          <div className="hml-layout">
+            <section className="hml-panel">
+              <h2>Getaran terakhir</h2>
 
-        return (
-          <g key={tick}>
-            <line
-              x1={x(index)}
-              x2={x(index)}
-              y1={top}
-              y2={height - bottom}
-              stroke="#d6e0eb"
-            />
+              <p className="hml-note">
+                Pilih pengukuran untuk melihat tren hariannya.
+              </p>
 
-            <text
-              x={x(index)}
-              y={height - 10}
-              textAnchor={
-                tick === 0
-                  ? 'start'
-                  : tick === 6
-                    ? 'end'
-                    : 'middle'
-              }
-              className="hm-svg-label"
-            >
-              {formatTime(rows[index].timestamp)}
-            </text>
-          </g>
-        );
-      })}
+              <div className="hml-readings">
+                {vibrations.map((item) => (
+                  <Reading
+                    key={item.channel_id}
+                    parameter={item}
+                    selected={
+                      selected?.channel_id === item.channel_id
+                    }
+                    onSelect={() =>
+                      setSelectedId(item.channel_id)
+                    }
+                  />
+                ))}
 
-      {CHANNELS.filter((channel) =>
-        visible.includes(channel.id),
-      ).map((channel) => (
-        <g key={channel.id}>
-          <polyline
-            points={rows
-              .map(
-                (row, index) =>
-                  `${x(index)},${y(row.values[channel.id])}`,
-              )
-              .join(' ')}
-            fill="none"
-            stroke={channel.color}
-            strokeWidth="2"
-            strokeDasharray={
-              channel.dashed ? '4 4' : undefined
-            }
-          />
+                {!vibrations.length && (
+                  <p className="hml-message">
+                    Data getaran belum tersedia.
+                  </p>
+                )}
+              </div>
+            </section>
 
-          <circle
-            cx={x(rows.length - 1)}
-            cy={y(lastRow.values[channel.id])}
-            r="3.5"
-            fill={channel.color}
-          >
-            <title>
-              {channel.label}:{' '}
-              {formatValue(lastRow.values[channel.id])} µm p-p
-            </title>
-          </circle>
-        </g>
-      ))}
-    </svg>
+            {selected ? (
+              <History
+                key={selected.channel_id}
+                parameter={selected}
+                revision={revision}
+              />
+            ) : (
+              <section className="hml-panel">
+                <h2>Tren & analisis getaran</h2>
+
+                <p className="hml-message">
+                  Menunggu data pengukuran unit ini.
+                </p>
+              </section>
+            )}
+          </div>
+
+          <div className="hml-bottom">
+            <section className="hml-panel">
+              <h2>Temperatur bantalan & oli</h2>
+
+              <div className="hml-temperature-grid">
+                {temperatures.map((item) => (
+                  <Reading
+                    key={item.channel_id}
+                    parameter={item}
+                  />
+                ))}
+              </div>
+
+              {!temperatures.length && (
+                <p className="hml-message">
+                  Data temperatur belum tersedia.
+                </p>
+              )}
+            </section>
+
+            <section className="hml-panel">
+              <h2>Speed</h2>
+
+              {speeds.map((item) => (
+                <Reading
+                  key={item.channel_id}
+                  parameter={item}
+                />
+              ))}
+
+              {!speeds.length && (
+                <p className="hml-message">
+                  Data speed belum tersedia.
+                </p>
+              )}
+
+              <p className="hml-note">
+                Satuan mengikuti metadata sumber,
+                setelah dikonfirmasi.
+              </p>
+            </section>
+          </div>
+
+          <p className="hml-note">
+            Pengelompokan berdasarkan nama tag masih
+            sementara. Nilai suspect, missing, dan invalid
+            tidak ditampilkan sebagai angka operasi.
+            Koneksi live server Vale dan analisis Partial
+            Discharge belum aktif.
+          </p>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -347,484 +695,75 @@ export default function HydroMonitoring({
   selectedUnitId,
   onUnitChange,
 } = {}) {
-  const options = units.length > 0 ? units : UNITS;
+  const [localId, setLocalId] = useState('KRB-01');
 
-  const [localUnitId, setLocalUnitId] = useState(
-    options[0][0],
-  );
-  const [hours, setHours] = useState(24);
-  const [demo, setDemo] = useState(true);
-  const [visible, setVisible] = useState(
-    CHANNELS.map((channel) => channel.id),
-  );
-  const [expanded, setExpanded] = useState(false);
+  const active =
+    units.find(
+      (item) =>
+        item[0] === (selectedUnitId ?? localId),
+    ) || units[0];
 
-  const requestedUnitId = selectedUnitId ?? localUnitId;
+  const plants = [
+    ...new Set(units.map((item) => item[1])),
+  ];
 
-  const unitIndex = Math.max(
-    0,
-    options.findIndex((item) => item[0] === requestedUnitId),
-  );
-
-  const unit = options[unitIndex];
-  const unitId = unit[0];
-  const unitLabel = getUnitLabel(unit);
-  const plantNames = [...new Set(options.map((item) => item[1]))];
-
-  function changeUnit(id) {
-    setLocalUnitId(id);
-    onUnitChange?.(id);
-  }
-
-  function toggleChannel(id) {
-    setVisible((current) =>
-      current.includes(id)
-        ? current.filter((channelId) => channelId !== id)
-        : [...current, id],
+  if (!active) {
+    return (
+      <div className="hm-app hm-live">
+        <p className="hml-message">
+          Daftar unit belum tersedia.
+        </p>
+      </div>
     );
   }
-
-  const rows = useMemo(() => {
-    if (!demo) return [];
-
-    return createDemoData(unitIndex).filter(
-      (row) =>
-        row.timestamp >= DEMO_END - hours * 3600000,
-    );
-  }, [demo, hours, unitIndex]);
-
-  const last = rows[rows.length - 1];
-
-  const peaks = Object.fromEntries(
-    CHANNELS.map((channel) => [
-      channel.id,
-      rows.length
-        ? Math.max(
-            ...rows.map((row) => row.values[channel.id]),
-          )
-        : null,
-    ]),
-  );
-
-  const maxValue = rows.length
-    ? Math.max(...Object.values(peaks))
-    : null;
-
-  const peakChannel = rows.length
-    ? CHANNELS.find(
-        (channel) => peaks[channel.id] === maxValue,
-      )?.label
-    : '—';
 
   return (
-    <div className="hm-app">
-      <header className="hm-header hm-vale-header">
-        <a
-          className="hm-brand vale-brand"
-          href="#monitoring"
-          aria-label="PT Vale Indonesia — monitoring unit"
-        >
-          <span className="vale-brand-copy">
-            <strong>HYDRO MONITORING</strong>
-            <small>PT Vale Indonesia Tbk</small>
+    <div className="hm-app hm-live">
+      <header className="hml-header">
+        <div>
+          <span className="hml-eyebrow">
+            PT VALE INDONESIA TBK · HYDRO INSIGHT
           </span>
-        </a>
 
-        <div className="hm-title">
           <h1>
-            {unit[1]} {unitLabel}
+            {active[1]} · {unitName(active)}
           </h1>
-          <p>VIBROSIGHT & PARTIAL DISCHARGE MONITORING</p>
+
+          <p>VibroSight monitoring & analysis</p>
         </div>
 
-        <div className="hm-header-controls">
-          <label>
-            UNIT SELECTION
+        <label className="hml-field">
+          Pilih unit
 
-            <select
-              value={unitId}
-              onChange={(event) =>
-                changeUnit(event.target.value)
-              }
-            >
-              {plantNames.map((plant) => (
-                <optgroup key={plant} label={plant}>
-                  {options
-                    .filter((item) => item[1] === plant)
-                    .map((item) => (
-                      <option key={item[0]} value={item[0]}>
-                        {item[1]} · {getUnitLabel(item)}
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
-
-          <div className="hm-time">
-            WAKTU DATA DEMO
-            <strong>
-              {last
-                ? `${formatTime(last.timestamp, true)} WITA`
-                : '—'}
-            </strong>
-          </div>
-        </div>
+          <select
+            value={active[0]}
+            onChange={(event) => {
+              setLocalId(event.target.value);
+              onUnitChange?.(event.target.value);
+            }}
+          >
+            {plants.map((plant) => (
+              <optgroup key={plant} label={plant}>
+                {units
+                  .filter((item) => item[1] === plant)
+                  .map((item) => (
+                    <option
+                      key={item[0]}
+                      value={item[0]}
+                    >
+                      {item[1]} · {unitName(item)}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
       </header>
 
-      <div className="hm-toolbar">
-        <Tag tone="amber">
-          {demo ? 'DEMO · DATA SINTETIS' : 'TANPA DATA'}
-        </Tag>
-
-        <span className="hm-coverage">
-          {plantNames.length} PLTA
-          <i />
-          {options.length} unit
-          <i />
-          {unitId}
-        </span>
-
-        <span className="hm-connection">
-          <i />
-          VibroSight belum terhubung
-        </span>
-
-        <label className="hm-demo-toggle">
-          <input
-            type="checkbox"
-            checked={demo}
-            onChange={(event) =>
-              setDemo(event.target.checked)
-            }
-          />
-          Tampilkan demo
-        </label>
-      </div>
-
-      {/* App.tsx sudah memiliki elemen main. */}
-      <div id="monitoring" className="hm-main">
-        <section
-          className="hm-kpis"
-          aria-label="Ringkasan unit"
-        >
-          <article className="hm-panel hm-kpi">
-            <div>
-              <span>Vibration data</span>
-              <small>MECHANICAL</small>
-            </div>
-            <strong>
-              {demo ? '6 kanal demo' : 'Belum tersedia'}
-            </strong>
-            <p>TGB, UGB, LGB · sumbu X & Y</p>
-          </article>
-
-          <article className="hm-panel hm-kpi">
-            <div>
-              <span>Generator air-gap</span>
-              <small>GENERATOR</small>
-            </div>
-            <strong className="hm-dim">—</strong>
-            <p>Menunggu sumber data air-gap</p>
-          </article>
-
-          <article className="hm-panel hm-kpi">
-            <div>
-              <span>Max vibration · {hours} jam</span>
-              <small>DEMO</small>
-            </div>
-            <strong>
-              {formatValue(maxValue)} <em>µm p-p</em>
-            </strong>
-            <p>
-              {peakChannel} · maksimum seluruh 6 kanal
-            </p>
-          </article>
-
-          <article className="hm-panel hm-kpi">
-            <div>
-              <span>Partial discharge</span>
-              <small>ELECTRICAL</small>
-            </div>
-            <strong className="hm-dim">—</strong>
-            <p>Integrasi PD pada tahap berikutnya</p>
-          </article>
-        </section>
-
-        <div
-          className={`hm-monitoring ${
-            expanded ? 'hm-expanded' : ''
-          }`}
-        >
-          <aside
-            className="hm-bearings"
-            aria-label="Pengukuran bantalan"
-          >
-            {[0, 1, 2].map((index) => (
-              <Gauge
-                key={index}
-                index={index}
-                channel={CHANNELS[index * 2]}
-                value={
-                  last?.values[CHANNELS[index * 2].id]
-                }
-                second={
-                  last?.values[CHANNELS[index * 2 + 1].id]
-                }
-                hasData={Boolean(last)}
-              />
-            ))}
-          </aside>
-
-          <section className="hm-panel hm-trend">
-            <div className="hm-panel-head">
-              <div>
-                <h2>Vibration trend</h2>
-                <p>
-                  Radial shaft displacement · data sintetis ·
-                  interval 5 menit
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="hm-expand"
-                onClick={() =>
-                  setExpanded((current) => !current)
-                }
-                aria-label={
-                  expanded
-                    ? 'Kembalikan susunan panel'
-                    : 'Perbesar panel grafik'
-                }
-                aria-pressed={expanded}
-              >
-                {expanded ? '↙' : '↗'}
-              </button>
-            </div>
-
-            <div className="hm-chart-tools">
-              <div
-                className="hm-periods"
-                aria-label="Rentang waktu"
-              >
-                {[1, 6, 24].map((period) => (
-                  <button
-                    key={period}
-                    type="button"
-                    className={
-                      period === hours ? 'is-active' : ''
-                    }
-                    onClick={() => setHours(period)}
-                    aria-pressed={period === hours}
-                  >
-                    {period} H
-                  </button>
-                ))}
-              </div>
-
-              <span>
-                {rows.length
-                  ? `${formatTime(
-                      rows[0].timestamp,
-                      true,
-                    )} — ${formatTime(
-                      last.timestamp,
-                      true,
-                    )} WITA`
-                  : 'Menunggu data'}
-              </span>
-            </div>
-
-            <div
-              className="hm-legend"
-              aria-label="Kanal grafik"
-            >
-              {CHANNELS.map((channel) => (
-                <button
-                  key={channel.id}
-                  type="button"
-                  aria-pressed={visible.includes(channel.id)}
-                  className={
-                    visible.includes(channel.id)
-                      ? ''
-                      : 'is-hidden'
-                  }
-                  onClick={() => toggleChannel(channel.id)}
-                >
-                  <i
-                    style={{
-                      borderColor: channel.color,
-                      borderStyle: channel.dashed
-                        ? 'dashed'
-                        : 'solid',
-                    }}
-                  />
-                  {channel.label}
-                </button>
-              ))}
-            </div>
-
-            <p className="hm-axis-caption">
-              Amplitude (peak-to-peak) · µm
-            </p>
-
-            <div className="hm-chart-wrap">
-              <Trend rows={rows} visible={visible} />
-
-              {rows.length > 0 && visible.length === 0 && (
-                <div className="hm-chart-message">
-                  Pilih kanal melalui legenda untuk
-                  menampilkan tren.
-                </div>
-              )}
-            </div>
-
-            <div className="hm-snapshot-heading">
-              <span>CHANNEL SNAPSHOT</span>
-              <span>
-                TERAKHIR / MAX {hours} JAM · µm p-p
-              </span>
-            </div>
-
-            <div className="hm-snapshots">
-              {CHANNELS.map((channel) => (
-                <div key={channel.id}>
-                  <span style={{ color: channel.color }}>
-                    {channel.label}
-                  </span>
-
-                  <p>
-                    {formatValue(last?.values[channel.id])}{' '}
-                    <small>
-                      / {formatValue(peaks[channel.id])}
-                    </small>
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <p className="hm-chart-note">
-              Nilai ilustrasi untuk pengembangan tampilan.
-              Tidak ada penilaian kondisi atau batas alarm
-              operasional.
-            </p>
-          </section>
-
-          <aside className="hm-analysis">
-            <section className="hm-panel hm-orbit">
-              <div className="hm-panel-head">
-                <div>
-                  <h2>Shaft orbit · X vs Y</h2>
-                  <p>TGB · pasangan sinyal tersinkronisasi</p>
-                </div>
-
-                <Tag>Belum tersedia</Tag>
-              </div>
-
-              <div className="hm-orbit-body">
-                <div
-                  className="hm-orbit-grid"
-                  aria-hidden="true"
-                >
-                  <span>Y</span>
-                  <span>X</span>
-                </div>
-
-                <div>
-                  <strong>Menunggu waveform</strong>
-                  <p>
-                    Orbit memerlukan sinyal X/Y
-                    tersinkronisasi. Nilai ringkasan tidak
-                    digunakan untuk membentuk orbit.
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <section className="hm-panel hm-pd">
-              <div className="hm-panel-head">
-                <div>
-                  <h2>Partial discharge analysis</h2>
-                  <p>Electrical monitoring</p>
-                </div>
-              </div>
-
-              <Empty title="Integrasi pada tahap berikutnya">
-                Fokus saat ini adalah koneksi real-time
-                VibroSight. Data dan satuan PD belum
-                dikonfigurasi.
-              </Empty>
-
-              <div className="hm-pd-footer">
-                <span>
-                  Phase A <b>—</b>
-                </span>
-                <span>
-                  Phase B <b>—</b>
-                </span>
-                <span>
-                  Phase C <b>—</b>
-                </span>
-              </div>
-            </section>
-          </aside>
-        </div>
-
-        <section className="hm-panel hm-activity">
-          <div className="hm-activity-title">
-            <h2>Monitoring activity</h2>
-            <span>STATUS PROTOTIPE</span>
-            <Tag tone="amber">Alarm belum terintegrasi</Tag>
-          </div>
-
-          <div className="hm-activity-grid">
-            <div>
-              <i className="hm-event-dot" />
-              <strong>
-                {unit[1]} {unitLabel} dipilih
-              </strong>
-              <p>
-                {demo
-                  ? 'Dataset sintetis tersedia untuk 6 kanal'
-                  : 'Data demo dinonaktifkan'}
-              </p>
-            </div>
-
-            <div>
-              <i className="hm-event-dot amber" />
-              <strong>Koneksi sumber belum tersedia</strong>
-              <p>
-                Waktu penerimaan dan latensi belum terukur
-              </p>
-            </div>
-
-            <div>
-              <i className="hm-event-dot blue" />
-              <strong>Metadata perlu dikonfirmasi</strong>
-              <p>
-                Satuan, jenis amplitudo, dan batas kondisi
-              </p>
-            </div>
-
-            <div className="hm-quality">
-              <strong>
-                {demo ? 'DEMO / BUKAN LIVE' : 'NO DATA'}
-              </strong>
-              <p>Riwayat kejadian sumber belum tersedia</p>
-            </div>
-          </div>
-        </section>
-
-        <footer className="hm-footer">
-          <span>
-            PROTOTIPE · Seluruh nilai getaran sintetis.
-            Tidak untuk keputusan operasi.
-          </span>
-
-          <span>{unitId} / UNIT MONITORING</span>
-        </footer>
-      </div>
+      <UnitData
+        key={active[0]}
+        unitId={active[0]}
+      />
     </div>
   );
 }

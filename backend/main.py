@@ -2,15 +2,18 @@ import logging
 
 import pymysql
 from fastapi import FastAPI, HTTPException
-from import_routes import router as import_router
-from database import get_connection
 from fastapi.middleware.cors import CORSMiddleware
-from import_routes import router as import_router
 
+from database import get_connection
+from import_routes import router as import_router
+from monitoring_routes import router as monitoring_router
 
 
 app = FastAPI(title="Hydro Insight API")
-app.include_router(import_router)
+
+logger = logging.getLogger("uvicorn.error")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -18,11 +21,14 @@ app.add_middleware(
         "http://127.0.0.1:5173",
     ],
     allow_credentials=False,
-    allow_methods=["GET"],
-    allow_headers=["Accept"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Accept", "Content-Type"],
 )
+
+
+# Setiap router didaftarkan cukup sekali.
 app.include_router(import_router)
-logger = logging.getLogger("uvicorn.error")
+app.include_router(monitoring_router)
 
 
 @app.get("/")
@@ -73,14 +79,18 @@ def get_units():
         }
 
     except pymysql.MySQLError as error:
-        error_code = error.args[0] if error.args else "unknown"
-        logger.error("Query database gagal. Kode: %s", error_code)
+        code = error.args[0] if error.args else "unknown"
+
+        logger.error(
+            "Query database gagal. Kode: %s",
+            code,
+        )
 
         raise HTTPException(
             status_code=503,
             detail=(
                 "Data unit belum dapat dibaca. "
-                "Periksa layanan MySQL dan konfigurasi backend."
+                "Periksa MySQL dan konfigurasi backend."
             ),
         ) from None
 
