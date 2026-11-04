@@ -403,3 +403,159 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+/* Filter rentang waktu */
+.hm-live .hml-range-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0 10px;
+}
+
+.hm-live .hml-range-toolbar > span {
+  color: #617183;
+  font-size: 11px;
+}
+
+.hm-live .hml-range-buttons {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d6e0eb;
+  border-radius: 7px;
+  background: #eaf0f6;
+}
+
+.hm-live .hml-range-buttons button {
+  min-width: 58px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #617183;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.hm-live .hml-range-buttons button:hover {
+  background: #dce8f2;
+}
+
+.hm-live .hml-range-buttons button.is-active {
+  background: #3cb5e5;
+  color: #14325c;
+}
+
+/* Legenda kurva */
+.hm-live .hml-curve-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 14px 0 6px;
+}
+
+.hm-live .hml-curve-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #425d76;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hm-live .hml-curve-legend button svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.hm-live .hml-curve-legend button span {
+  overflow-wrap: anywhere;
+}
+
+.hm-live .hml-curve-legend button:hover {
+  border-color: #d6e0eb;
+  background: #f1f6fb;
+}
+
+.hm-live .hml-curve-legend button.is-hidden {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.hm-live .hml-curve-legend button:focus-visible,
+.hm-live .hml-range-buttons button:focus-visible {
+  outline: 2px solid #14325c;
+  outline-offset: 2px;
+}
+
+/* Statistik pengukuran terpilih */
+.hm-live .hml-stat-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #d6e0eb;
+}
+
+.hm-live .hml-stat-heading strong {
+  color: #14325c;
+  font-size: 13px;
+}
+
+.hm-live .hml-stat-heading small {
+  color: #617183;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.hm-live .hml-history {
+  min-width: 0;
+}
+
+.hm-live .hml-chart {
+  width: 100%;
+  height: 360px;
+  min-width: 0;
+}
+
+.hm-live .hml-message li {
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .hm-live .hml-range-buttons {
+    width: 100%;
+  }
+
+  .hm-live .hml-range-buttons button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .hm-live .hml-curve-legend {
+    gap: 5px;
+  }
+
+  .hm-live .hml-curve-legend button {
+    padding: 7px;
+    font-size: 10px;
+  }
+
+  .hm-live .hml-chart {
+    height: 300px;
+  }
+}

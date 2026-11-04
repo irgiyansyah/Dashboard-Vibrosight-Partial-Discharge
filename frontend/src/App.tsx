@@ -490,6 +490,7 @@ function App() {
               )}
               selectedUnitId={monitoringUnit?.id}
               onUnitChange={changeMonitoringUnit}
+              mode={page === 'Vibration Analysis' ? 'analysis' : 'monitoring'}
             />
           ) : page === 'Overview' ? (
             <DatabaseOverview
