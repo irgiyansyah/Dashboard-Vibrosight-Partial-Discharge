@@ -221,7 +221,7 @@ export default function DatabaseOverview({
     >
       <div className="dbo-toolbar">
         <span className="dbo-badge">
-          HISTORIS · BUKAN LIVE
+          HISTORIS MODE
         </span>
 
         <button

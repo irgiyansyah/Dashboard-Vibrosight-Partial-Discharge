@@ -360,7 +360,7 @@ function App() {
             <p>Vibration & Partial Discharge</p>
           </div>
 
-          <small>Monitoring · read-only</small>
+          <small>Monitoring Hydro Area</small>
         </div>
       </aside>
 

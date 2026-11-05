@@ -417,7 +417,7 @@ function HistoryReadings({
 
       <p className="hml-note">
         {isAnalysis
-          ? 'Kartu mengikuti tanggal dan rentang grafik. Pilih pengukuran untuk melihat statistiknya.'
+          ? ''
           : 'Nilai terbaru yang tersimpan di database. Filter tanggal berlaku pada grafik riwayat.'}
       </p>
 
@@ -852,7 +852,7 @@ const latest = readingParameters
           ))}
         </div>
 
-        <span>Data asli · tanpa agregasi</span>
+        <span>Data Historical</span>
       </div>
 
       <p className="hml-note">
@@ -1141,7 +1141,7 @@ function UnitData({ unitId, mode = 'monitoring' }) {
     <div className="hml-body">
       <div className="hml-statusbar">
         <span className="hml-badge">
-          HISTORIS · BUKAN LIVE
+          HISTORIS MODE
         </span>
 
         <span>
@@ -1215,7 +1215,7 @@ function UnitData({ unitId, mode = 'monitoring' }) {
           {!isAnalysis && (
             <div className="hml-bottom">
               <section className="hml-panel">
-                <h2>Temperatur bantalan & oli</h2>
+                <h2>Temperature Bearing & oil</h2>
 
                 <div className="hml-temperature-grid">
                   {temperatures.map((item) => (
@@ -1299,7 +1299,7 @@ export default function HydroMonitoring({
       <header className="hml-header">
         <div>
           <span className="hml-eyebrow">
-            PT VALE INDONESIA TBK · HYDRO INSIGHT
+            PT VALE INDONESIA TBK HYDRO INSIGHT
           </span>
 
           <h1>
