@@ -15,31 +15,58 @@ DATE_FORMAT = "%m/%d/%Y %H:%M:%S"
 
 MISSING = {"", "N/A", "NA", "NULL"}
 
-# Usulan berdasarkan awalan tag, belum konfirmasi pengguna.
+# Usulan pemetaan berdasarkan identitas pada tag.
+# Tetap perlu dikonfirmasi sebelum commit.
 UNIT_MAP = {
     "KGS1": "KRB-01",
     "KGS2": "KRB-02",
     "BGS1": "BLB-01",
     "BGS2": "BLB-02",
+    "LGS1": "LRN-01",
+    "LGS2": "LRN-02",
+    "LGS3": "LRN-03",
 }
 
 
 def suggest_channel(tag):
-    match = re.match(r"^U-(KGS[12]|BGS[12])(?:_|-)", tag)
-    unit_id = UNIT_MAP.get(match.group(1)) if match else None
+    upper = tag.strip().upper()
 
-    upper = tag.upper()
+    match = re.match(
+        r"^U-(KGS[12]|BGS[12]|LGS[123])(?:_|-)",
+        upper,
+    )
+
+    unit_id = (
+        UNIT_MAP.get(match.group(1))
+        if match
+        else None
+    )
+
+    # Pola tag yang ditemukan pada file UGB dan LGB Larona.
+    # Ini hanya mengusulkan jenis pengukuran.
+    # Satuan, lokasi bearing, dan ambang alarm tidak ditetapkan.
+    larona_vibration = re.fullmatch(
+        r"U-LGS[123]-(?:"
+        r"UGB-X-PK-PK-70|"
+        r"UGB-Y-PK-PK-340|"
+        r"GB-X-PK-PK-70|"
+        r"LGB-Y-PK-PK-340"
+        r")-AI",
+        upper,
+    )
+
     kind = "unknown"
 
-    if "VIB" in upper:
+    if "VIB" in upper or larona_vibration is not None:
         kind = "vibration"
+
     elif any(
         word in upper
         for word in ("TEMP", "TMP", "_TE_", "-PAD")
     ):
         kind = "temperature"
+
     elif "SPEED" in upper:
-        # Mengikuti pilihan ENUM pada tabel channels saat ini.
         kind = "other"
 
     return unit_id, kind

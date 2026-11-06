@@ -7,7 +7,12 @@ from contextlib import suppress
 from pydantic import BaseModel, ConfigDict, Field
 
 from database import get_connection
-from import_preview import MAX_BYTES, MISSING, PreviewParser, preview_file
+from import_preview import (
+    MAX_BYTES,
+    MISSING,
+    PreviewParser,
+    preview_file,
+)
 
 
 class ImportConflict(Exception):
@@ -15,16 +20,34 @@ class ImportConflict(Exception):
 
 
 class ImportConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+    )
 
-    source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_sha256: str = Field(
+        pattern=r"^[0-9a-f]{64}$"
+    )
+
     mapping_confirmed: bool
     unit_map: dict[str, str]
+
+    # Semua nilai numerik pada tag ini ditandai suspect.
     review_tags: list[str] = Field(default_factory=list)
 
+    # Klasifikasi eksplisit untuk kanal baru.
+    # Tidak menetapkan satuan, ambang, atau kualitas pengukuran.
+    vibration_tags: list[str] = Field(default_factory=list)
 
-NUMBER = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
-PREFIX = re.compile(r"^U-(KGS[12]|BGS[12])(?:_|-)")
+
+NUMBER = re.compile(
+    r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)"
+    r"(?:[eE][+-]?\d+)?"
+)
+
+PREFIX = re.compile(
+    r"^U-(KGS[12]|BGS[12]|LGS[123])(?:_|-)"
+)
 
 
 def parse_value(raw, review):
@@ -43,7 +66,13 @@ def parse_value(raw, review):
 
 
 class MeasurementWriter(PreviewParser):
-    def __init__(self, cursor, batch_id, channel_ids, review_tags):
+    def __init__(
+        self,
+        cursor,
+        batch_id,
+        channel_ids,
+        review_tags,
+    ):
         super().__init__()
 
         self.cursor = cursor
@@ -58,48 +87,67 @@ class MeasurementWriter(PreviewParser):
     def consume_row(self, cells):
         is_header = self.headers is None
 
-        # Gunakan validasi struktur, tanggal, dan baris dari parser preview.
+        # Validasi struktur, tanggal, dan nilai melalui parser.
         super().consume_row(cells)
 
         if is_header:
             if cells[1:] != list(self.channel_ids):
-                raise ValueError("Header berubah antara preview dan impor.")
+                raise ValueError(
+                    "Header berubah antara preview dan impor."
+                )
             return
 
-        for tag, raw in zip(self.headers[1:], cells[1:]):
+        for tag, raw in zip(
+            self.headers[1:],
+            cells[1:],
+        ):
             value, quality = parse_value(
                 raw,
                 tag in self.review_tags,
             )
 
-            self.pending.append((
-                self.channel_ids[tag],
-                self.previous,
-                value,
-                raw,
-                quality,
-                self.batch_id,
-                self.row_count,
-            ))
+            self.pending.append(
+                (
+                    self.channel_ids[tag],
+                    self.previous,
+                    value,
+                    raw,
+                    quality,
+                    self.batch_id,
+                    self.row_count,
+                )
+            )
 
-            self.flagged += int(quality != "unverified")
+            # Termasuk missing, invalid, dan suspect.
+            self.flagged += int(
+                quality != "unverified"
+            )
 
-            # Kirim bertahap agar tidak menampung seluruh data di memori.
             if len(self.pending) >= 1000:
                 self.flush()
 
     def flush(self):
-        if self.pending:
-            self.cursor.executemany(
-                """INSERT INTO measurements
-                   (channel_id, measured_at, measured_value, raw_value,
-                    quality, import_batch_id, source_row)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                self.pending,
-            )
+        if not self.pending:
+            return
 
-            self.inserted += len(self.pending)
-            self.pending.clear()
+        self.cursor.executemany(
+            """
+            INSERT INTO measurements (
+                channel_id,
+                measured_at,
+                measured_value,
+                raw_value,
+                quality,
+                import_batch_id,
+                source_row
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            self.pending,
+        )
+
+        self.inserted += len(self.pending)
+        self.pending.clear()
 
 
 def write_stream(stream, writer):
@@ -116,15 +164,19 @@ def write_stream(stream, writer):
         size += len(chunk)
 
         if size > MAX_BYTES:
-            raise ValueError("Ukuran file melebihi 100 MiB.")
+            raise ValueError(
+                "Ukuran file melebihi 100 MiB."
+            )
 
         digest.update(chunk)
         writer.feed(decoder.decode(chunk))
 
-    writer.feed(decoder.decode(b"", final=True))
+    writer.feed(
+        decoder.decode(b"", final=True)
+    )
     writer.close()
 
-    # Pastikan tabel selesai dan tidak terpotong.
+    # Pastikan tabel lengkap sebelum menyelesaikan penulisan.
     writer.result()
     writer.flush()
 
@@ -137,7 +189,7 @@ def save_import(stream, filename, config):
             "Konfirmasi pemetaan unit sebelum menyimpan."
         )
 
-    # Validasi seluruh file sebelum membuka transaksi.
+    # Periksa seluruh file sebelum membuka transaksi.
     preview = preview_file(stream)
 
     if preview["source_sha256"] != config.source_sha256:
@@ -165,13 +217,21 @@ def save_import(stream, filename, config):
             "review_tags memuat tag yang tidak ada dalam file."
         )
 
+    if not set(config.vibration_tags).issubset(tags):
+        raise ValueError(
+            "vibration_tags memuat tag yang tidak ada dalam file."
+        )
+
     mapping = {}
     prefixes = set()
 
     for tag in tags:
         match = PREFIX.match(tag)
 
-        if match is None or match.group(1) not in config.unit_map:
+        if (
+            match is None
+            or match.group(1) not in config.unit_map
+        ):
             raise ValueError(
                 f"Pemetaan unit belum tersedia untuk: {tag}"
             )
@@ -185,7 +245,9 @@ def save_import(stream, filename, config):
             "unit_map harus hanya memuat awalan tag dalam file."
         )
 
-    if len(set(config.unit_map.values())) != len(config.unit_map):
+    if len(set(config.unit_map.values())) != len(
+        config.unit_map
+    ):
         raise ValueError(
             "Setiap awalan tag harus dipetakan ke unit berbeda."
         )
@@ -193,9 +255,10 @@ def save_import(stream, filename, config):
     connection = get_connection()
 
     try:
-        # Pastikan database menolak nilai yang tidak sesuai tipe kolom.
         with connection.cursor() as cursor:
-            cursor.execute("SELECT @@SESSION.sql_mode AS mode")
+            cursor.execute(
+                "SELECT @@SESSION.sql_mode AS mode"
+            )
             mode = cursor.fetchone()["mode"] or ""
 
             cursor.execute(
@@ -207,11 +270,13 @@ def save_import(stream, filename, config):
                 ),
             )
 
-        # Transaksi eksplisit meskipun database.py memakai autocommit=True.
+        # Transaksi eksplisit meskipun autocommit=True.
         connection.begin()
 
         with connection.cursor() as cursor:
-            cursor.execute("SELECT id, plant_id FROM units")
+            cursor.execute(
+                "SELECT id, plant_id FROM units"
+            )
 
             units = {
                 row["id"]: row["plant_id"]
@@ -219,18 +284,18 @@ def save_import(stream, filename, config):
             }
 
             for prefix, unit_id in config.unit_map.items():
-                plant = (
-                    "KRB"
-                    if prefix.startswith("KGS")
-                    else "BLB"
-                )
+                plant = {
+                    "KGS": "KRB",
+                    "BGS": "BLB",
+                    "LGS": "LRN",
+                }[prefix[:3]]
 
                 if units.get(unit_id) != plant:
                     raise ValueError(
-                        f"Unit {unit_id} tidak sesuai PLTA untuk {prefix}."
+                        f"Unit {unit_id} tidak sesuai PLTA "
+                        f"untuk {prefix}."
                     )
 
-            # Cegah file identik diimpor kembali.
             cursor.execute(
                 """
                 SELECT id
@@ -246,10 +311,17 @@ def save_import(stream, filename, config):
                 )
 
             cursor.execute(
-                """INSERT INTO import_batches
-                   (source_filename, source_sha256, source_timezone,
-                    source_datetime_format, source_row_count, import_config)
-                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                """
+                INSERT INTO import_batches (
+                    source_filename,
+                    source_sha256,
+                    source_timezone,
+                    source_datetime_format,
+                    source_row_count,
+                    import_config
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
                 (
                     filename,
                     config.source_sha256,
@@ -266,7 +338,7 @@ def save_import(stream, filename, config):
             for tag, unit_id in mapping.items():
                 cursor.execute(
                     """
-                    SELECT id, unit_id
+                    SELECT id, unit_id, measurement_type
                     FROM channels
                     WHERE tag_name = %s
                     """,
@@ -280,19 +352,43 @@ def save_import(stream, filename, config):
                     for row in existing
                 ):
                     raise ImportConflict(
-                        f"Tag sudah terdaftar pada unit berbeda: {tag}"
+                        "Tag sudah terdaftar pada unit berbeda: "
+                        f"{tag}"
                     )
+
+                # Jangan mengubah metadata kanal lama diam-diam.
+                if existing and tag in config.vibration_tags:
+                    if (
+                        existing[0]["measurement_type"]
+                        != "vibration"
+                    ):
+                        raise ImportConflict(
+                            "Klasifikasi tag lama belum vibration: "
+                            f"{tag}. Periksa metadata kanal "
+                            "sebelum mengimpor."
+                        )
 
                 if existing:
                     channel_ids[tag] = existing[0]["id"]
 
                 else:
-                    # Jenis dan satuan belum dianggap terverifikasi.
+                    # Satuan dan definisi tetap belum ditetapkan.
                     cursor.execute(
-                        """INSERT INTO channels
-                           (unit_id, tag_name, measurement_type)
-                           VALUES (%s, %s, 'unknown')""",
-                        (unit_id, tag),
+                        """
+                        INSERT INTO channels (
+                            unit_id,
+                            tag_name,
+                            measurement_type
+                        )
+                        VALUES (%s, %s, %s)
+                        """,
+                        (
+                            unit_id,
+                            tag,
+                            "vibration"
+                            if tag in config.vibration_tags
+                            else "unknown",
+                        ),
                     )
 
                     channel_ids[tag] = cursor.lastrowid
@@ -315,13 +411,17 @@ def save_import(stream, filename, config):
                 or writer.inserted != expected
             ):
                 raise ValueError(
-                    "Isi file atau jumlah pengukuran tidak konsisten."
+                    "Isi file atau jumlah pengukuran "
+                    "tidak konsisten."
                 )
 
             cursor.execute(
-                """UPDATE import_batches
-                   SET inserted_count = %s, flagged_count = %s
-                   WHERE id = %s""",
+                """
+                UPDATE import_batches
+                SET inserted_count = %s,
+                    flagged_count = %s
+                WHERE id = %s
+                """,
                 (
                     writer.inserted,
                     writer.flagged,
@@ -329,7 +429,6 @@ def save_import(stream, filename, config):
                 ),
             )
 
-        # Semua bagian impor berhasil: simpan transaksi.
         connection.commit()
 
         return {
@@ -343,10 +442,8 @@ def save_import(stream, filename, config):
         }
 
     except Exception:
-        # Batalkan perubahan jika terjadi kegagalan sebelum commit.
         with suppress(Exception):
             connection.rollback()
-
         raise
 
     finally:

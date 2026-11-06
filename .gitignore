@@ -11,3 +11,5 @@ __pycache__/
 # Dependency dan hasil build frontend
 node_modules/
 dist/
+
+/backend/local_data/

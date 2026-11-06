@@ -7,10 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import get_connection
 from import_routes import router as import_router
 from monitoring_routes import router as monitoring_router
-
+from tgb_routes import router as tgb_router
+from voltage_routes import router as voltage_router 
 
 app = FastAPI(title="Hydro Insight API")
-
+app.include_router(tgb_router)
+app.include_router(voltage_router)
 logger = logging.getLogger("uvicorn.error")
 
 

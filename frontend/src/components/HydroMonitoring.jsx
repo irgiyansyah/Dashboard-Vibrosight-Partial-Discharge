@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 
 import './HydroMonitoring.css';
+import VoltageMetric from './VoltageMetric';
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
@@ -68,8 +69,7 @@ function label(parameter) {
   return parameter.display_name || parameter.tag_name;
 }
 
-// Pengelompokan sementara berdasarkan metadata dan nama tag.
-// Bukan verifikasi lokasi sensor atau satuan pengukuran.
+// Pengelompokan sementara, bukan verifikasi lokasi sensor.
 function category(parameter) {
   if (parameter.measurement_type === 'vibration') {
     return 'vibration';
@@ -101,8 +101,8 @@ function nextDay(day) {
   return date.toISOString().slice(0, 10);
 }
 
-// UTC digunakan sebagai koordinat kalender.
-// Jam dari sumber tidak dikonversi ke zona waktu lain.
+// UTC hanya digunakan untuk koordinat kalender.
+// Jam pengukuran sumber tidak dikonversi.
 function sourceTimeMs(value) {
   const source = String(value || '');
 
@@ -124,8 +124,6 @@ function metadataKey(parameter) {
   ]);
 }
 
-// Warna konsisten berdasarkan kelompok tag.
-// G/T tetap memakai nama sumber, tidak diasumsikan sebagai UGB/TGB.
 function vibrationStyle(parameter) {
   const tag = String(parameter.tag_name || '').toUpperCase();
 
@@ -321,13 +319,10 @@ function resolveReading(
   parameter,
   { mode, ready, hasRange, result, error },
 ) {
-  // Unit Monitoring tetap memakai pengukuran terbaru di database.
   if (mode !== 'analysis') {
     return { parameter, message: '' };
   }
 
-  // Hapus nilai terbaru dari metadata agar tidak muncul
-  // sebagai pengganti data historis yang belum tersedia.
   const empty = {
     ...parameter,
     latest_time: null,
@@ -365,9 +360,6 @@ function resolveReading(
     };
   }
 
-  // Riwayat sudah diurutkan menaik oleh fetchHistory.
-  // Gunakan baris terakhir, bukan nilai valid terakhir
-  // dari waktu yang lebih lama.
   const last = result.rows.at(-1);
 
   if (!last) {
@@ -415,11 +407,12 @@ function HistoryReadings({
           : 'Getaran terakhir'}
       </h2>
 
-      <p className="hml-note">
-        {isAnalysis
-          ? ''
-          : 'Nilai terbaru yang tersimpan di database. Filter tanggal berlaku pada grafik riwayat.'}
-      </p>
+      {!isAnalysis && (
+        <p className="hml-note">
+          Nilai terbaru yang tersimpan di database.
+          Filter tanggal berlaku pada grafik riwayat.
+        </p>
+      )}
 
       {isAnalysis && start && end && (
         <p className="hml-note">
@@ -458,7 +451,6 @@ function HistoryReadings({
   );
 }
 
-// Membaca seluruh halaman untuk satu pengukuran.
 async function fetchHistory(channelId, start, end, signal) {
   let firstPage = null;
   let after = null;
@@ -566,6 +558,7 @@ function History({
 }) {
   const [chosenDay, setChosenDay] = useState('');
   const [hours, setHours] = useState(24);
+  const [endHour, setEndHour] = useState(24);
   const [retry, setRetry] = useState(0);
   const [hiddenIds, setHiddenIds] = useState([]);
 
@@ -589,28 +582,34 @@ function History({
       }));
   }, [parameters, parameter, selectedMetadata]);
 
-  // Semua pengukuran dibaca agar seluruh kartu bisa mengikuti rentang.
-// Grafik tetap mengelompokkan kurva berdasarkan metadata yang sesuai.
-const readingParameters = parameters.length
-  ? parameters
-  : [parameter];
+  const readingParameters = parameters.length
+    ? parameters
+    : [parameter];
 
-const idsKey = readingParameters
-  .map((item) => item.channel_id)
-  .sort((a, b) => a - b)
-  .join(',');
+  const idsKey = readingParameters
+    .map((item) => item.channel_id)
+    .sort((a, b) => a - b)
+    .join(',');
 
-const latest = readingParameters
-  .map((item) => item.latest_time)
-  .filter(Boolean)
-  .sort()
-  .at(-1);
+  const latest = readingParameters
+    .map((item) => item.latest_time)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
 
   const day = chosenDay || latest?.slice(0, 10) || '';
   const endDay = nextDay(day);
 
   const endMs = endDay
-    ? Date.parse(`${endDay}T00:00:00Z`)
+    ? Date.parse(`${endDay}T00:00:00Z`) -
+      (24 - endHour) * 3600000
+    : NaN;
+
+  const latestDay = latest?.slice(0, 10) || '';
+  const latestEndDay = nextDay(latestDay);
+
+  const latestEndMs = latestEndDay
+    ? Date.parse(`${latestEndDay}T00:00:00Z`)
     : NaN;
 
   const startMs = endMs - hours * 3600000;
@@ -668,7 +667,6 @@ const latest = readingParameters
       }
 
       try {
-        // Maksimal dua pengukuran dimuat bersamaan.
         await Promise.all(
           Array.from(
             { length: Math.min(2, ids.length) },
@@ -696,8 +694,6 @@ const latest = readingParameters
   const current = state.key === key;
   const loading = Boolean(start && end && idsKey) && !current;
 
-  // Gabungkan berdasarkan timestamp, bukan nomor urut baris.
-  // Timestamp yang tidak tersedia pada suatu kurva tetap null.
   const chartRows = useMemo(() => {
     if (!current) return [];
 
@@ -759,8 +755,10 @@ const latest = readingParameters
     !parameter.engineering_unit ||
     !parameter.measurement_definition;
 
-  const differentMetadataCount =
-    Math.max(0, parameters.length - series.length);
+  const differentMetadataCount = Math.max(
+    0,
+    parameters.length - series.length,
+  );
 
   const rangeLabel = hours === 168 ? '7 hari' : `${hours} jam`;
 
@@ -775,15 +773,22 @@ const latest = readingParameters
     : [];
 
   function axisLabel(tick) {
-    if (!Number.isFinite(Number(tick))) return '';
+    const tickMs = Number(tick);
 
-    const iso = new Date(Number(tick)).toISOString();
+    if (!Number.isFinite(tickMs)) return '';
+
+    const iso = new Date(tickMs).toISOString();
+    const clockText = iso.slice(11, 16);
 
     if (hours === 168) {
       return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
     }
 
-    return Number(tick) === endMs ? '24:00' : iso.slice(11, 16);
+    if (tickMs === endMs && clockText === '00:00') {
+      return '24:00';
+    }
+
+    return clockText;
   }
 
   function tooltipLabel(tick) {
@@ -800,299 +805,412 @@ const latest = readingParameters
     );
   }
 
+  function applyWindowEnd(targetEndMs) {
+    if (!Number.isFinite(targetEndMs)) return;
+
+    const endDate = new Date(targetEndMs);
+
+    const displayDay = new Date(targetEndMs - 1)
+      .toISOString()
+      .slice(0, 10);
+
+    const displayHour = endDate.getUTCHours() || 24;
+
+    setChosenDay(displayDay);
+    setEndHour(displayHour);
+  }
+
+  function moveWindow(direction) {
+    if (!Number.isFinite(endMs)) return;
+
+    let targetEndMs =
+      endMs + direction * hours * 3600000;
+
+    if (direction > 0) {
+      if (
+        !Number.isFinite(latestEndMs) ||
+        endMs >= latestEndMs
+      ) {
+        return;
+      }
+
+      targetEndMs = Math.min(targetEndMs, latestEndMs);
+    }
+
+    applyWindowEnd(targetEndMs);
+  }
+
+  function goToLatestWindow() {
+    applyWindowEnd(latestEndMs);
+  }
+
+  const canMoveForward =
+    Number.isFinite(endMs) &&
+    Number.isFinite(latestEndMs) &&
+    endMs < latestEndMs;
+
+  const atLatestWindow =
+    Number.isFinite(endMs) &&
+    Number.isFinite(latestEndMs) &&
+    endMs === latestEndMs;
+
   return (
-  <div className="hml-layout">
-    <HistoryReadings
-      parameters={readingParameters}
-      selectedId={parameter.channel_id}
-      onSelect={onSelect}
-      mode={mode}
-      ready={current}
-      start={start}
-      end={end}
-      results={state.results}
-      errors={state.errors}
-    />
+    <div className="hml-layout">
+      <HistoryReadings
+        parameters={readingParameters}
+        selectedId={parameter.channel_id}
+        onSelect={onSelect}
+        mode={mode}
+        ready={current}
+        start={start}
+        end={end}
+        results={state.results}
+        errors={state.errors}
+      />
 
-    <section className="hml-panel hml-history">
-      <div className="hml-section-head">
-        <div>
-          <h2>Tren getaran · {rangeLabel}</h2>
-          <p>
-            {series.length} pengukuran · X garis utuh · Y putus-putus
-          </p>
-        </div>
-
-        <label className="hml-field">
-          Tanggal akhir data
-          <input
-            type="date"
-            value={day}
-            onChange={(event) => setChosenDay(event.target.value)}
-          />
-        </label>
-      </div>
-
-      <div className="hml-range-toolbar">
-        <div
-          className="hml-range-buttons"
-          role="group"
-          aria-label="Rentang waktu grafik"
-        >
-          {RANGE_OPTIONS.map((option) => (
-            <button
-              key={option.hours}
-              type="button"
-              className={hours === option.hours ? 'is-active' : ''}
-              aria-pressed={hours === option.hours}
-              onClick={() => setHours(option.hours)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
-        <span>Data Historical</span>
-      </div>
-
-      <p className="hml-note">
-        {start && end
-          ? `${time(start)} sampai sebelum ${time(end)}.`
-          : 'Pilih tanggal data.'}
-        {' '}Rentang berakhir pada akhir tanggal pilihan.
-        Waktu mengikuti sumber; zona waktu belum dikonfirmasi.
-      </p>
-
-      <div
-        className="hml-curve-legend"
-        role="group"
-        aria-label="Tampilkan atau sembunyikan kurva"
-      >
-        {series.map((item) => {
-          const hidden = hiddenIds.includes(item.channel_id);
-
-          return (
-            <button
-              key={item.channel_id}
-              type="button"
-              className={hidden ? 'is-hidden' : ''}
-              aria-pressed={!hidden}
-              title={`${item.tag_name} — ${
-                hidden ? 'Tampilkan' : 'Sembunyikan'
-              } kurva`}
-              onClick={() => toggleSeries(item.channel_id)}
-            >
-              <svg width="30" height="12" aria-hidden="true">
-                <line
-                  x1="1"
-                  y1="6"
-                  x2="29"
-                  y2="6"
-                  stroke={item.style.color}
-                  strokeWidth="2.5"
-                  strokeDasharray={item.style.dash}
-                />
-              </svg>
-
-              <span>{item.style.name}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <p className="hml-note">
-        Klik legenda untuk menampilkan atau menyembunyikan kurva.
-        Nama singkat mengikuti tag sumber.
-      </p>
-
-      {metadataUnconfirmed && (
-        <p className="hml-notice">
-          Satuan atau definisi amplitudo belum lengkap.
-          Perbandingan antarkurva masih sementara sampai metadata
-          setiap pengukuran dikonfirmasi.
-        </p>
-      )}
-
-      {differentMetadataCount > 0 && (
-        <p className="hml-note">
-          {differentMetadataCount} pengukuran memiliki metadata
-          satuan atau definisi amplitudo berbeda. Pilih pengukurannya
-          di sebelah kiri untuk melihat kelompok tersebut.
-        </p>
-      )}
-
-      {loading && (
-        <p className="hml-message" role="status">
-          Memuat seluruh kurva untuk rentang {rangeLabel}…
-        </p>
-      )}
-
-      {!start && (
-        <p className="hml-message">
-          Belum ada tanggal pengukuran untuk kelompok ini.
-        </p>
-      )}
-
-      {failedSeries.length > 0 && (
-        <div className="hml-message" role="alert">
-          <p>
-            Sebagian kurva gagal dimuat. Kurva yang berhasil tetap
-            ditampilkan.
-          </p>
-
-          <ul>
-            {failedSeries.map((item) => (
-              <li key={item.channel_id}>
-                {item.tag_name}: {state.errors[item.channel_id]}
-              </li>
-            ))}
-          </ul>
-
-          <button
-            type="button"
-            onClick={() => setRetry((value) => value + 1)}
-          >
-            Coba lagi
-          </button>
-        </div>
-      )}
-
-      {current && (
-        <>
-          <p className="hml-note">
-            Nilai pengukuran · {engineeringUnit}
-          </p>
-
-          {hasPlot ? (
-            <div
-              className="hml-chart"
-              role="img"
-              aria-label={`Grafik getaran ${rangeLabel} dengan ${
-                visibleSeries.length
-              } kurva dipilih`}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={chartRows}
-                  margin={{
-                    top: 16,
-                    right: 24,
-                    bottom: 8,
-                    left: 0,
-                  }}
-                >
-                  <CartesianGrid
-                    stroke="#d6e0eb"
-                    strokeDasharray="3 3"
-                  />
-
-                  <XAxis
-                    dataKey="axisTime"
-                    type="number"
-                    domain={[startMs, endMs]}
-                    ticks={ticks}
-                    tickFormatter={axisLabel}
-                    minTickGap={20}
-                  />
-
-                  <YAxis
-                    domain={['auto', 'auto']}
-                    width={65}
-                    tickFormatter={number}
-                  />
-
-                  <Tooltip
-                    labelFormatter={tooltipLabel}
-                    formatter={(value, name) => [
-                      number(value),
-                      name,
-                    ]}
-                  />
-
-                  {visibleSeries.map((item) => (
-                    <Line
-                      key={item.channel_id}
-                      type="linear"
-                      dataKey={item.dataKey}
-                      name={`${item.style.name} · ${item.tag_name}`}
-                      stroke={item.style.color}
-                      strokeDasharray={item.style.dash}
-                      strokeWidth={1.6}
-                      dot={false}
-                      activeDot={{ r: 4 }}
-                      connectNulls={false}
-                      isAnimationActive={false}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="hml-message">
-              {visibleSeries.length === 0
-                ? 'Semua kurva disembunyikan. Klik legenda untuk menampilkan.'
-                : failedSeries.length === series.length
-                  ? 'Riwayat belum dapat dimuat.'
-                  : 'Tidak ada nilai yang dapat diplot untuk kurva dan rentang ini.'}
+      <section className="hml-panel hml-history">
+        <div className="hml-section-head">
+          <div>
+            <h2>Vibration Trend · {rangeLabel}</h2>
+            <p>
+              {series.length} pengukuran · X garis utuh · Y putus-putus
             </p>
-          )}
-        </>
-      )}
+          </div>
 
-      {summary && (
-        <>
-          <div className="hml-stat-heading">
-            <strong>
-              Statistik pengukuran: {vibrationStyle(parameter).name}
-            </strong>
+          <label className="hml-field">
+            Tanggal akhir data
 
-            <small>{label(parameter)}</small>
+            <input
+              type="date"
+              value={day}
+              onChange={(event) => {
+                setChosenDay(event.target.value);
+                setEndHour(24);
+              }}
+            />
+          </label>
+        </div>
 
-            {hiddenIds.includes(parameter.channel_id) && (
-              <small>
-                Kurva ini disembunyikan; statistik tetap ditampilkan.
-              </small>
+        <div className="hml-range-toolbar">
+          <div
+            className="hml-range-buttons"
+            role="group"
+            aria-label="Rentang waktu grafik"
+          >
+            {RANGE_OPTIONS.map((option) => (
+              <button
+                key={option.hours}
+                type="button"
+                className={
+                  hours === option.hours ? 'is-active' : ''
+                }
+                aria-pressed={hours === option.hours}
+                onClick={() => setHours(option.hours)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <span>Data Historical</span>
+        </div>
+
+        <p className="hml-note">
+          {start && end
+            ? `${time(start)} sampai sebelum ${time(end)}.`
+            : 'Pilih tanggal data.'}
+          {' '}Gunakan tombol di bawah grafik untuk menggeser rentang.
+          Memilih tanggal secara manual mengatur akhir rentang ke 24:00.
+          Waktu mengikuti sumber; zona waktu belum dikonfirmasi.
+        </p>
+
+        <div
+          className="hml-curve-legend"
+          role="group"
+          aria-label="Tampilkan atau sembunyikan kurva"
+        >
+          {series.map((item) => {
+            const hidden = hiddenIds.includes(item.channel_id);
+
+            return (
+              <button
+                key={item.channel_id}
+                type="button"
+                className={hidden ? 'is-hidden' : ''}
+                aria-pressed={!hidden}
+                title={`${item.tag_name} — ${
+                  hidden ? 'Tampilkan' : 'Sembunyikan'
+                } kurva`}
+                onClick={() => toggleSeries(item.channel_id)}
+              >
+                <svg width="30" height="12" aria-hidden="true">
+                  <line
+                    x1="1"
+                    y1="6"
+                    x2="29"
+                    y2="6"
+                    stroke={item.style.color}
+                    strokeWidth="2.5"
+                    strokeDasharray={item.style.dash}
+                  />
+                </svg>
+
+                <span>{item.style.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="hml-note">
+          Klik legenda untuk menampilkan atau menyembunyikan kurva.
+          Nama singkat mengikuti tag sumber.
+        </p>
+
+        {metadataUnconfirmed && (
+          <p className="hml-notice">
+            Satuan atau definisi amplitudo belum lengkap.
+            Perbandingan antarkurva masih sementara sampai metadata
+            setiap pengukuran dikonfirmasi.
+          </p>
+        )}
+
+        {differentMetadataCount > 0 && (
+          <p className="hml-note">
+            {differentMetadataCount} pengukuran memiliki metadata
+            satuan atau definisi amplitudo berbeda. Pilih pengukurannya
+            di sebelah kiri untuk melihat kelompok tersebut.
+          </p>
+        )}
+
+        {loading && (
+          <p className="hml-message" role="status">
+            Memuat seluruh kurva untuk rentang {rangeLabel}…
+          </p>
+        )}
+
+        {!start && (
+          <p className="hml-message">
+            Belum ada tanggal pengukuran untuk kelompok ini.
+          </p>
+        )}
+
+        {failedSeries.length > 0 && (
+          <div className="hml-message" role="alert">
+            <p>
+              Sebagian kurva gagal dimuat. Kurva yang berhasil tetap
+              ditampilkan.
+            </p>
+
+            <ul>
+              {failedSeries.map((item) => (
+                <li key={item.channel_id}>
+                  {item.tag_name}: {state.errors[item.channel_id]}
+                </li>
+              ))}
+            </ul>
+
+            <button
+              type="button"
+              onClick={() => setRetry((value) => value + 1)}
+            >
+              Coba lagi
+            </button>
+          </div>
+        )}
+
+        {current && (
+          <>
+            <p className="hml-note">
+              Nilai pengukuran · {engineeringUnit}
+            </p>
+
+            {hasPlot ? (
+              <div
+                className="hml-chart"
+                role="img"
+                aria-label={`Grafik getaran ${rangeLabel} dengan ${
+                  visibleSeries.length
+                } kurva dipilih`}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={chartRows}
+                    margin={{
+                      top: 16,
+                      right: 24,
+                      bottom: 8,
+                      left: 0,
+                    }}
+                  >
+                    <CartesianGrid
+                      stroke="#d6e0eb"
+                      strokeDasharray="3 3"
+                    />
+
+                    <XAxis
+                      dataKey="axisTime"
+                      type="number"
+                      domain={[startMs, endMs]}
+                      ticks={ticks}
+                      tickFormatter={axisLabel}
+                      minTickGap={20}
+                    />
+
+                    <YAxis
+                      domain={['auto', 'auto']}
+                      width={65}
+                      tickFormatter={number}
+                    />
+
+                    <Tooltip
+                      labelFormatter={tooltipLabel}
+                      formatter={(value, name) => [
+                        number(value),
+                        name,
+                      ]}
+                    />
+
+                    {visibleSeries.map((item) => (
+                      <Line
+                        key={item.channel_id}
+                        type="linear"
+                        dataKey={item.dataKey}
+                        name={`${item.style.name} · ${item.tag_name}`}
+                        stroke={item.style.color}
+                        strokeDasharray={item.style.dash}
+                        strokeWidth={1.6}
+                        dot={false}
+                        activeDot={{ r: 4 }}
+                        connectNulls={false}
+                        isAnimationActive={false}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="hml-message">
+                {visibleSeries.length === 0
+                  ? 'Semua kurva disembunyikan. Klik legenda untuk menampilkan.'
+                  : failedSeries.length === series.length
+                    ? 'Riwayat belum dapat dimuat.'
+                    : 'Tidak ada nilai yang dapat diplot untuk kurva dan rentang ini.'}
+              </p>
             )}
+          </>
+        )}
+
+        {/* Navigasi berada setelah grafik dan sebelum statistik. */}
+        <div
+          className="hml-time-navigation"
+          role="group"
+          aria-label="Navigasi waktu grafik getaran"
+        >
+          <div className="hml-navigation-actions">
+            <button
+              type="button"
+              disabled={loading || !Number.isFinite(endMs)}
+              onClick={() => moveWindow(-1)}
+              aria-label={`Mundur ${rangeLabel}`}
+            >
+              <span aria-hidden="true">←</span>
+              Mundur {rangeLabel}
+            </button>
+
+            <button
+              type="button"
+              disabled={loading || !canMoveForward}
+              onClick={() => moveWindow(1)}
+              aria-label={`Maju ${rangeLabel}`}
+            >
+              Maju {rangeLabel}
+              <span aria-hidden="true">→</span>
+            </button>
+
+            <button
+              type="button"
+              className="hml-latest-button"
+              disabled={
+                loading ||
+                !Number.isFinite(latestEndMs) ||
+                atLatestWindow
+              }
+              onClick={goToLatestWindow}
+            >
+              Ke data terbaru
+            </button>
           </div>
 
-          <div className="hml-stats">
-            <Metric
-              title="Minimum"
-              value={number(summary.minimum)}
-              detail={time(summary.minimum_time)}
-            />
+          <div
+            className="hml-navigation-period"
+            aria-live="polite"
+          >
+            <span>
+              {start && end
+                ? `${time(start)} → ${time(end)}`
+                : 'Pilih tanggal data'}
+            </span>
 
-            <Metric
-              title="Maksimum"
-              value={number(summary.maximum)}
-              detail={time(summary.maximum_time)}
-            />
-
-            <Metric
-              title="Rata-rata"
-              value={number(summary.average)}
-              detail={engineeringUnit}
-            />
+            <small>
+              Waktu akhir tidak termasuk dalam rentang.
+            </small>
           </div>
+        </div>
 
-          <p className="hml-note">
-            Dianalisis: {number(summary.analyzed_count)} dari{' '}
-            {number(summary.total_count)} pengukuran.
-            {' '}Dikecualikan: {number(summary.excluded_count)}.
-            {' '}Statistik hanya untuk pengukuran terpilih selama
-            seluruh rentang.
-          </p>
+        {summary && (
+          <>
+            <div className="hml-stat-heading">
+              <strong>
+                Statistik pengukuran: {vibrationStyle(parameter).name}
+              </strong>
 
-          <p className="hml-note">
-            Cakupan timestamp pengukuran terpilih:{' '}
-            {time(summary.first_time)} — {time(summary.last_time)}.
-            {' '}Rentang pilihan dapat mencakup tanggal yang belum
-            memiliki data.
-          </p>
-        </>
-      )}
+              <small>{label(parameter)}</small>
 
-              <p className="hml-note">
+              {hiddenIds.includes(parameter.channel_id) && (
+                <small>
+                  Kurva ini disembunyikan; statistik tetap ditampilkan.
+                </small>
+              )}
+            </div>
+
+            <div className="hml-stats">
+              <Metric
+                title="Minimum"
+                value={number(summary.minimum)}
+                detail={time(summary.minimum_time)}
+              />
+
+              <Metric
+                title="Maksimum"
+                value={number(summary.maximum)}
+                detail={time(summary.maximum_time)}
+              />
+
+              <Metric
+                title="Rata-rata"
+                value={number(summary.average)}
+                detail={engineeringUnit}
+              />
+            </div>
+
+            <p className="hml-note">
+              Dianalisis: {number(summary.analyzed_count)} dari{' '}
+              {number(summary.total_count)} pengukuran.
+              {' '}Dikecualikan: {number(summary.excluded_count)}.
+              {' '}Statistik hanya untuk pengukuran terpilih selama
+              seluruh rentang.
+            </p>
+
+            <p className="hml-note">
+              Cakupan timestamp pengukuran terpilih:{' '}
+              {time(summary.first_time)} — {time(summary.last_time)}.
+              {' '}Rentang pilihan dapat mencakup tanggal yang belum
+              memiliki data.
+            </p>
+          </>
+        )}
+
+        <p className="hml-note">
           Nilai suspect, missing, dan invalid tidak diplot.
           Data unverified masih memerlukan verifikasi.
           Batas normal, alarm, dan trip belum diterapkan.
@@ -1182,14 +1300,22 @@ function UnitData({ unitId, mode = 'monitoring' }) {
               className="hml-operations"
               aria-label="Parameter operasi"
             >
-              {PENDING_PARAMETERS.map(([title, detail]) => (
-                <Metric
-                  key={title}
-                  title={title}
-                  value="—"
-                  detail={`${detail} · belum tersedia`}
-                />
-              ))}
+              {PENDING_PARAMETERS.map(([title, detail]) =>
+                  title === 'Voltage' ? (
+                    <VoltageMetric
+                      key={title}
+                      unitId={unitId}
+                      parameters={parameters}
+                    />
+                  ) : (
+                    <Metric
+                      key={title}
+                      title={title}
+                      value="—"
+                      detail={`${detail} · belum tersedia`}
+                    />
+                  ),
+                )}
             </section>
           )}
 
@@ -1335,10 +1461,10 @@ export default function HydroMonitoring({
       </header>
 
       <UnitData
-  key={`${active[0]}:${mode}`}
-  unitId={active[0]}
-  mode={mode}
-/>
+        key={`${active[0]}:${mode}`}
+        unitId={active[0]}
+        mode={mode}
+      />
     </div>
   );
 }
