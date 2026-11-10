@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 const VOLTAGE_TAGS = {
   'LRN-01': 'U-LAR1-EI_81104_AVE-AI',
   'LRN-02': 'U-LAR2-EI_81204_AVE-AI',
@@ -13,49 +15,121 @@ const FORMAT = new Intl.NumberFormat('id-ID', {
   maximumFractionDigits: 2,
 });
 
-function voltageState(unitId, parameters) {
+function voltageReading(row) {
+  if (!row) {
+    return { value: null, status: 'Data tidak tersedia pada rentang ini', stamp: '' };
+  }
+  const canShow = Boolean(row.measured_at) &&
+    row.quality === 'unverified' && Number.isFinite(row.plot_value);
+  const statuses = {
+    unverified: canShow ? 'Belum diverifikasi' : 'Nilai terakhir belum tersedia',
+    suspect: 'Perlu ditinjau; angka tidak ditampilkan',
+    missing: 'Pengukuran terakhir kosong',
+    invalid: 'Pengukuran terakhir tidak valid',
+  };
+  return {
+    value: canShow ? row.plot_value : null,
+    status: statuses[row.quality] || 'Kualitas data belum tersedia',
+    stamp: row.measured_at ? String(row.measured_at).replace('T', ' ').slice(0, 19) : '',
+  };
+}
+
+function displayTime(value) {
+  return value ? String(value).replace('T', ' ').slice(0, 19) : '—';
+}
+
+export default function VoltageMetric({
+  unitId,
+  parameters = [],
+  start = '',
+  end = '',
+  revision = 0,
+  loadHistory,
+}) {
   const expectedTag = VOLTAGE_TAGS[unitId];
   const matches = (Array.isArray(parameters) ? parameters : []).filter(
     (item) => expectedTag && item.unit_id === unitId && item.tag_name === expectedTag,
   );
-  if (matches.length !== 1) {
-    return {
-      value: null,
-      unit: 'Satuan belum dikonfirmasi',
-      status: matches.length > 1 ? 'Pemetaan voltage perlu ditinjau' : 'Data voltage belum tersedia',
-      stamp: '',
-      tag: expectedTag || '',
-    };
-  }
-  const parameter = matches[0];
-  const rawNumber = parameter.latest_plot_value;
-  const canShow = Boolean(parameter.latest_time) &&
-    parameter.latest_quality === 'unverified' && Number.isFinite(rawNumber);
-  const statuses = {
-    unverified: canShow ? 'Belum diverifikasi' : 'Nilai terbaru belum tersedia',
-    suspect: 'Perlu ditinjau; angka tidak ditampilkan',
-    missing: 'Data terbaru kosong',
-    invalid: 'Data terbaru tidak valid',
-  };
-  return {
-    value: canShow ? rawNumber : null,
-    unit: parameter.engineering_unit || 'Satuan belum dikonfirmasi',
-    status: statuses[parameter.latest_quality] || 'Kualitas data belum tersedia',
-    stamp: parameter.latest_time ? String(parameter.latest_time).replace('T', ' ').slice(0, 19) : '',
-    tag: expectedTag,
-  };
-}
+  const parameter = matches.length === 1 ? matches[0] : null;
+  const channelId = parameter?.channel_id;
+  const canLoad = Number.isSafeInteger(channelId) && channelId > 0 &&
+    Boolean(start && end && start < end) && typeof loadHistory === 'function';
+  const key = JSON.stringify([unitId, channelId, start, end, revision]);
+  const [state, setState] = useState({ key: '', row: null, error: '' });
 
-export default function VoltageMetric({ unitId, parameters = [] }) {
-  const reading = voltageState(unitId, parameters);
+  useEffect(() => {
+    if (!canLoad) return;
+    const controller = new AbortController();
+    let active = true;
+    let timedOut = false;
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 120000);
+
+    async function load() {
+      try {
+        // Existing paginated history loader validates order, range and row count.
+        // Select the actual last row, even if it is missing/suspect/invalid.
+        const result = await loadHistory(channelId, start, end, controller.signal);
+        if (!result || !Array.isArray(result.rows)) {
+          throw new Error('Format riwayat voltage tidak sesuai.');
+        }
+        if (active) {
+          setState({ key, row: result.rows.at(-1) || null, error: '' });
+        }
+      } catch (error) {
+        if (active) {
+          setState({
+            key,
+            row: null,
+            error: timedOut
+              ? 'Pengambilan data melebihi 120 detik. Tekan Muat ulang data.'
+              : error instanceof Error ? error.message : 'Gagal membaca riwayat voltage.',
+          });
+        }
+      } finally {
+        window.clearTimeout(timer);
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [canLoad, channelId, start, end, key, loadHistory]);
+
+  const current = state.key === key;
+  const loading = canLoad && !current;
+  let reading = { value: null, status: '', stamp: '' };
+  if (!parameter) {
+    reading.status = matches.length > 1
+      ? 'Pemetaan voltage perlu ditinjau' : 'Data voltage belum tersedia untuk unit ini';
+  } else if (!canLoad) {
+    reading.status = 'Pilih rentang tanggal yang tersedia.';
+  } else if (loading) {
+    reading.status = 'Memuat voltage pada rentang pilihan…';
+  } else if (state.error) {
+    reading.status = `Gagal memuat: ${state.error}`;
+  } else {
+    reading = voltageReading(state.row);
+  }
+
   return (
-    <article className="hml-metric" title={reading.tag}>
+    <article className="hml-metric" title={expectedTag || ''} aria-busy={loading}>
       <span>Voltage</span>
       <strong>{Number.isFinite(reading.value) ? FORMAT.format(reading.value) : '—'}</strong>
-      <small>{reading.unit}</small>
-      <small>{reading.status}</small>
+      <small>{parameter?.engineering_unit || 'Satuan belum dikonfirmasi'}</small>
+      <small>Nilai terakhir dalam rentang pilihan</small>
       <small>
-        {reading.stamp ? `Terbaru di database: ${reading.stamp}` : 'Belum ada waktu pengukuran'}
+        {start && end
+          ? `${displayTime(start)} sampai sebelum ${displayTime(end)}`
+          : 'Belum ada rentang waktu'}
+      </small>
+      <small aria-live="polite">{reading.status}</small>
+      <small>
+        {reading.stamp ? `Waktu pengukuran: ${reading.stamp}` : '—'}
       </small>
     </article>
   );

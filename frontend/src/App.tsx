@@ -5,7 +5,7 @@ import type { HydroUnit, Plant } from './data/units'
 import HistoricalData from './components/HistoricalData'
 import type { MeasurementFile } from './components/HistoricalData'
 import HydroMonitoring from './components/HydroMonitoring.jsx'
-import DatabaseOverview from './components/DatabaseOverview'
+import HydroOverview from './components/HydroOverview'
 
 import valeLogo from './assets/vale-logo.png'
 
@@ -27,11 +27,7 @@ const menus = [
 type Page = (typeof menus)[number]
 type PlantFilter = Plant | 'all'
 
-const plantOrder: Plant[] = [
-  'Larona',
-  'Karebbe',
-  'Balambano',
-]
+const plantOrder: Plant[] = ['Larona', 'Karebbe', 'Balambano']
 
 function MenuIcon({ page }: { page: Page }) {
   const icons = {
@@ -43,7 +39,6 @@ function MenuIcon({ page }: { page: Page }) {
         <rect x="14" y="14" width="7" height="7" rx="1.5" />
       </>
     ),
-
     'Unit Monitoring': (
       <>
         <rect x="3" y="4" width="18" height="13" rx="2" />
@@ -51,22 +46,18 @@ function MenuIcon({ page }: { page: Page }) {
         <path d="M6 11h3l2-4 3 7 2-3h2" />
       </>
     ),
-
     'Vibration Analysis': (
       <path d="M2 12h3l3-8 4 16 4-12 3 4h3" />
     ),
-
     'Partial Discharge': (
       <path d="m13 2-9 12h7l-1 8 10-12h-7l1-8Z" />
     ),
-
     'Alarms & Events': (
       <>
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
         <path d="M10 21h4M12 2V1" />
       </>
     ),
-
     'Historical Data': (
       <>
         <path d="M3 11a9 9 0 1 1 2.6 7.4" />
@@ -74,7 +65,6 @@ function MenuIcon({ page }: { page: Page }) {
         <path d="M12 7v5l3 2" />
       </>
     ),
-
     Reports: (
       <>
         <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" />
@@ -82,7 +72,6 @@ function MenuIcon({ page }: { page: Page }) {
         <path d="M8 17v-3M12 17v-5M16 17v-2" />
       </>
     ),
-
     'Data Sources': (
       <>
         <ellipse cx="12" cy="5" rx="8" ry="3" />
@@ -116,12 +105,9 @@ function App() {
   const [plant, setPlant] = useState<PlantFilter>('all')
   const [unitId, setUnitId] = useState('all')
 
-  // File yang dibuka melalui Historical Data disimpan
-  // selama sesi React.
-  // Overview dan Unit Monitoring membaca pengukuran
-  // melalui API database.
+  // Historical Data menyimpan file selama sesi React.
+  // Overview, Unit Monitoring, dan Vibration Analysis membaca API database.
   const [datasets, setDatasets] = useState<MeasurementFile[]>([])
-
   const [hydroUnits, setHydroUnits] = useState<HydroUnit[]>([])
   const [unitsLoading, setUnitsLoading] = useState(true)
   const [unitsError, setUnitsError] = useState<string | null>(null)
@@ -140,13 +126,11 @@ function App() {
     async function loadUnits() {
       try {
         const units = await fetchHydroUnits(controller.signal)
-
         if (!active) return
-
         setHydroUnits(units)
+        setUnitsError(null)
       } catch (error: unknown) {
         if (!active) return
-
         setHydroUnits([])
 
         const message = timedOut
@@ -160,10 +144,7 @@ function App() {
         setUnitsError(message)
       } finally {
         window.clearTimeout(timeoutId)
-
-        if (active) {
-          setUnitsLoading(false)
-        }
+        if (active) setUnitsLoading(false)
       }
     }
 
@@ -179,31 +160,23 @@ function App() {
   const plants = plantOrder.filter((name) =>
     hydroUnits.some((unit) => unit.plant === name),
   )
-
+  const isOverviewPage = page === 'Overview'
   const isHistoricalPage = page === 'Historical Data'
   const isMonitoringPage =
-    page === 'Unit Monitoring' ||
-    page === 'Vibration Analysis'
+    page === 'Unit Monitoring' || page === 'Vibration Analysis'
 
   const availableUnits = hydroUnits.filter(
     (unit) => plant === 'all' || unit.plant === plant,
   )
-
   const visibleUnits = availableUnits.filter(
     (unit) => unitId === 'all' || unit.id === unitId,
   )
-
-  const selectedUnit = hydroUnits.find(
-    (unit) => unit.id === unitId,
-  )
-
+  const selectedUnit = hydroUnits.find((unit) => unit.id === unitId)
   const monitoringUnit =
     selectedUnit ?? availableUnits[0] ?? hydroUnits[0]
-
   const selectedUnitLabel = selectedUnit
     ? `${selectedUnit.plant} · ${selectedUnit.name}`
     : undefined
-
 
   const loadedUnitIds = new Set(
     datasets
@@ -213,9 +186,7 @@ function App() {
 
   function changeMonitoringUnit(id: string) {
     const unit = hydroUnits.find((item) => item.id === id)
-
     if (!unit) return
-
     setPlant(unit.plant)
     setUnitId(unit.id)
   }
@@ -225,10 +196,14 @@ function App() {
     setUnitId('all')
   }
 
-  function openUnit(unit: HydroUnit) {
+  // HydroOverview memberikan ID unit, bukan objek HydroUnit.
+  function openUnit(id: string) {
+    const unit = hydroUnits.find((item) => item.id === id)
+    if (!unit) return
     setPlant(unit.plant)
     setUnitId(unit.id)
     setPage('Unit Monitoring')
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }
 
   function resetFilters() {
@@ -249,12 +224,7 @@ function App() {
   if (unitsLoading) {
     return (
       <div className="dashboard">
-        <section
-          className="panel page-placeholder"
-          role="status"
-          aria-live="polite"
-          aria-busy="true"
-        >
+        <section className="panel page-placeholder" role="status" aria-live="polite" aria-busy="true">
           <h2>Memuat daftar unit</h2>
           <p>Mengambil data PLTA dan unit dari backend.</p>
         </section>
@@ -265,20 +235,10 @@ function App() {
   if (unitsError) {
     return (
       <div className="dashboard">
-        <section
-          className="panel page-placeholder"
-          role="alert"
-        >
+        <section className="panel page-placeholder" role="alert">
           <h2>Daftar unit belum dapat dimuat</h2>
           <p>{unitsError}</p>
-
-          <button
-            type="button"
-            className="outline-button"
-            onClick={retryLoadUnits}
-          >
-            Coba lagi
-          </button>
+          <button type="button" className="outline-button" onClick={retryLoadUnits}>Coba lagi</button>
         </section>
       </div>
     )
@@ -289,20 +249,8 @@ function App() {
       <div className="dashboard">
         <section className="panel page-placeholder">
           <h2>Belum ada unit terdaftar</h2>
-
-          <p>
-            API berhasil diakses, tetapi daftar unit kosong.
-            Periksa tabel plants dan units di database
-            hydro_insight.
-          </p>
-
-          <button
-            type="button"
-            className="outline-button"
-            onClick={retryLoadUnits}
-          >
-            Muat ulang
-          </button>
+          <p>API berhasil diakses, tetapi daftar unit kosong. Periksa tabel plants dan units di database hydro_insight.</p>
+          <button type="button" className="outline-button" onClick={retryLoadUnits}>Muat ulang</button>
         </section>
       </div>
     )
@@ -321,18 +269,11 @@ function App() {
           }}
         >
           <span className="vale-logo-plate">
-            <img
-              src={valeLogo}
-              alt="PT Vale Indonesia"
-              className="vale-logo"
-            />
+            <img src={valeLogo} alt="PT Vale Indonesia" className="vale-logo" />
           </span>
         </a>
 
-        <p className="brand-caption">
-          Hydro Condition Monitoring
-        </p>
-
+        <p className="brand-caption">Hydro Condition Monitoring</p>
         <p className="nav-caption">WORKSPACE</p>
 
         <nav aria-label="Navigasi dashboard">
@@ -340,12 +281,8 @@ function App() {
             <button
               key={menu}
               type="button"
-              className={`nav-item ${
-                page === menu ? 'active' : ''
-              }`}
-              aria-current={
-                page === menu ? 'page' : undefined
-              }
+              className={`nav-item ${page === menu ? 'active' : ''}`}
+              aria-current={page === menu ? 'page' : undefined}
               onClick={() => setPage(menu)}
             >
               <MenuIcon page={menu} />
@@ -359,195 +296,102 @@ function App() {
             <strong>Assessment workspace</strong>
             <p>Vibration & Partial Discharge</p>
           </div>
-
           <small>Monitoring Hydro Area</small>
         </div>
       </aside>
 
       <div className="main-layout">
-        <header className="topbar">
-          <div className="breadcrumb">
-            Workspace <span>/</span> <strong>{page}</strong>
-          </div>
-
-          <div className="profile">
-            <span className="badge neutral">
-              Historis · bukan live
-            </span>
-
-            <div className="avatar">J</div>
-
-            <div className="profile-text">
-              <strong>Julio</strong>
-              <small>Hydro assessment</small>
+        {/* Overview sudah memiliki header sendiri. */}
+        {!isOverviewPage && (
+          <header className="topbar">
+            <div className="breadcrumb">Workspace <span>/</span> <strong>{page}</strong></div>
+            <div className="profile">
+              <span className="badge neutral">Historis · bukan live</span>
+              <div className="avatar">J</div>
+              <div className="profile-text"><strong>Julio</strong><small>Hydro assessment</small></div>
             </div>
-          </div>
-        </header>
+          </header>
+        )}
 
-        {!isHistoricalPage && !isMonitoringPage && (
-          <section
-            className="filterbar"
-            aria-label="Filter monitoring"
-          >
+        {/* Filter lama hanya berlaku pada halaman lain. Overview selalu seluruh unit. */}
+        {!isOverviewPage && !isHistoricalPage && !isMonitoringPage && (
+          <section className="filterbar" aria-label="Filter monitoring">
             <label>
               <span>PLTA</span>
-
-              <select
-                value={plant}
-                onChange={(event) =>
-                  changePlant(
-                    event.target.value as PlantFilter,
-                  )
-                }
-              >
+              <select value={plant} onChange={(event) => changePlant(event.target.value as PlantFilter)}>
                 <option value="all">Semua PLTA</option>
-
-                {plants.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
+                {plants.map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
             </label>
-
             <label>
               <span>Unit</span>
-
-              <select
-                value={unitId}
-                onChange={(event) =>
-                  setUnitId(event.target.value)
-                }
-              >
+              <select value={unitId} onChange={(event) => setUnitId(event.target.value)}>
                 <option value="all">Semua unit</option>
-
-                {availableUnits.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.plant} · {unit.name}
-                  </option>
-                ))}
+                {availableUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.plant} · {unit.name}</option>)}
               </select>
             </label>
-
-            <button
-              type="button"
-              className="text-button"
-              onClick={resetFilters}
-            >
-              Reset filter
-            </button>
-
-            <div className="connection-status">
-              <span className="status-dot" />
-              Data historis · live belum terhubung
-            </div>
+            <button type="button" className="text-button" onClick={resetFilters}>Reset filter</button>
+            <div className="connection-status"><span className="status-dot" />Data historis · live belum terhubung</div>
           </section>
         )}
 
-                <main
+        <main
           className={
-            isMonitoringPage
-              ? `unit-monitoring-page${
-                  page === 'Vibration Analysis'
-                    ? ' vibration-analysis-page'
-                    : ''
-                }`
-              : undefined
+            isOverviewPage
+              ? 'overview-page'
+              : isMonitoringPage
+                ? `unit-monitoring-page${page === 'Vibration Analysis' ? ' vibration-analysis-page' : ''}`
+                : undefined
           }
+          style={isOverviewPage ? { maxWidth: 'none', width: '100%', margin: 0, padding: 0, minWidth: 0 } : undefined}
         >
-          {!isMonitoringPage && (
+          {!isOverviewPage && !isMonitoringPage && (
             <div className="page-heading">
               <div>
                 <h1>{page}</h1>
-
-                <p>
-                  {isHistoricalPage
-                    ? 'Eksplorasi file pengukuran dalam sesi browser.'
-                    : selectedUnitLabel
-                      ? selectedUnitLabel
-                      : plant === 'all'
-                        ? 'Armada hidro · Larona, Karebbe, dan Balambano'
-                        : `Armada hidro · PLTA ${plant}`}
-                </p>
+                <p>{isHistoricalPage
+                  ? 'Eksplorasi file pengukuran dalam sesi browser.'
+                  : selectedUnitLabel
+                    ? selectedUnitLabel
+                    : plant === 'all'
+                      ? 'Armada hidro · Larona, Karebbe, dan Balambano'
+                      : `Armada hidro · PLTA ${plant}`}</p>
               </div>
-
-              <span className="badge neutral">
-                {isHistoricalPage
-                  ? `${loadedUnitIds.size} unit dengan file dalam sesi`
-                  : `${visibleUnits.length} dari ${hydroUnits.length} unit`}
-              </span>
+              <span className="badge neutral">{isHistoricalPage
+                ? `${loadedUnitIds.size} unit dengan file dalam sesi`
+                : `${visibleUnits.length} dari ${hydroUnits.length} unit`}</span>
             </div>
           )}
 
-          {isMonitoringPage ? (
+          {isOverviewPage ? (
+            <HydroOverview onOpenUnit={openUnit} />
+          ) : isMonitoringPage ? (
             <HydroMonitoring
-              units={hydroUnits.map(
-                (unit): [string, string, string] => [
-                  unit.id,
-                  unit.plant,
-                  unit.name,
-                ],
-              )}
+              units={hydroUnits.map((unit): [string, string, string] => [unit.id, unit.plant, unit.name])}
               selectedUnitId={monitoringUnit?.id}
               onUnitChange={changeMonitoringUnit}
               mode={page === 'Vibration Analysis' ? 'analysis' : 'monitoring'}
             />
-          ) : page === 'Overview' ? (
-            <DatabaseOverview
-              units={visibleUnits}
-              onOpenUnit={openUnit}
-            />
-                    ) : page === 'Historical Data' ? (
-            <HistoricalData
-              datasets={datasets}
-              onChange={setDatasets}
-            />
+          ) : page === 'Historical Data' ? (
+            <HistoricalData datasets={datasets} onChange={setDatasets} />
           ) : page === 'Data Sources' ? (
-            
             <section className="panel">
               <div className="panel-heading">
                 <h2>File dalam sesi browser</h2>
-
-                <p>
-                  Overview dan Unit Monitoring membaca data
-                  dari database. Daftar di bawah hanya
-                  menunjukkan file yang dibuka melalui
-                  Historical Data dalam sesi browser ini.
-                </p>
+                <p>Overview dan Unit Monitoring membaca data dari database. Daftar di bawah hanya menunjukkan file yang dibuka melalui Historical Data dalam sesi browser ini.</p>
               </div>
 
               {datasets.length > 0 ? (
                 <div className="table-scroll">
                   <table>
-                    <thead>
-                      <tr>
-                        <th>PLTA</th>
-                        <th>Unit</th>
-                        <th>File sumber</th>
-                        <th>Kanal</th>
-                        <th>Timestamp</th>
-                      </tr>
-                    </thead>
-
+                    <thead><tr><th>PLTA</th><th>Unit</th><th>File sumber</th><th>Kanal</th><th>Timestamp</th></tr></thead>
                     <tbody>
                       {datasets.map((dataset) => {
-                        const unit = hydroUnits.find(
-                          (item) =>
-                            item.id === dataset.unitId,
-                        )
-
+                        const unit = hydroUnits.find((item) => item.id === dataset.unitId)
                         return (
                           <tr key={dataset.unitId}>
-                            <td>
-                              {unit?.plant ??
-                                'Belum dipetakan'}
-                            </td>
-
-                            <td>
-                              {unit?.name ??
-                                dataset.unitId}
-                            </td>
-
+                            <td>{unit?.plant ?? 'Belum dipetakan'}</td>
+                            <td>{unit?.name ?? dataset.unitId}</td>
                             <td>{dataset.source}</td>
                             <td>{dataset.tags.length}</td>
                             <td>{dataset.rows.length}</td>
@@ -558,61 +402,27 @@ function App() {
                   </table>
                 </div>
               ) : (
-                <div className="empty-content">
-                  <p>
-                    Belum ada file yang dibuka dalam sesi
-                    browser ini. Data di database tetap
-                    dapat dilihat melalui Overview dan
-                    Unit Monitoring.
-                  </p>
-                </div>
+                <div className="empty-content"><p>Belum ada file yang dibuka dalam sesi browser ini. Data di database tetap dapat dilihat melalui Overview dan Unit Monitoring.</p></div>
               )}
 
               <div className="empty-content">
-                <button
-                  type="button"
-                  className="outline-button"
-                  onClick={openHistorical}
-                >
-                  Impor atau kelola data historis
-                </button>
+                <button type="button" className="outline-button" onClick={openHistorical}>Impor atau kelola data historis</button>
               </div>
-
-              <div className="panel-footnote">
-                Metadata yang masih diperlukan: satuan per
-                tag, definisi pengukuran, format tanggal,
-                timezone, pemetaan sensor, dan batas alarm
-                resmi. Data PD serta koneksi live belum
-                tersedia.
-              </div>
+              <div className="panel-footnote">Metadata yang masih diperlukan: satuan per tag, definisi pengukuran, format tanggal, timezone, pemetaan sensor, dan batas alarm resmi. Data PD serta koneksi live belum tersedia.</div>
             </section>
           ) : (
             <section className="panel page-placeholder">
               <span className="empty-icon">i</span>
               <h2>{page}</h2>
               <p>{pageDescription(page)}</p>
-
-              <button
-                type="button"
-                className="outline-button"
-                onClick={() => setPage('Overview')}
-              >
-                Kembali ke Overview
-              </button>
+              <button type="button" className="outline-button" onClick={() => setPage('Overview')}>Kembali ke Overview</button>
             </section>
           )}
 
-          {!isMonitoringPage && (
+          {!isOverviewPage && !isMonitoringPage && (
             <footer>
-              <span>
-                PT Vale Indonesia · Hydro assessment
-                dashboard
-              </span>
-
-              <span>
-                {hydroUnits.length} unit dari database ·{' '}
-                Data historis · Live belum terhubung
-              </span>
+              <span>PT Vale Indonesia · Hydro assessment dashboard</span>
+              <span>{hydroUnits.length} unit dari database · Data historis · Live belum terhubung</span>
             </footer>
           )}
         </main>
@@ -625,13 +435,10 @@ function pageDescription(page: Page) {
   switch (page) {
     case 'Partial Discharge':
       return 'Data instrumen partial discharge belum tersedia.'
-
     case 'Alarms & Events':
       return 'Riwayat kejadian dan konfigurasi batas alarm belum tersedia.'
-
     case 'Reports':
       return 'Fitur laporan akan ditambahkan setelah alur impor dan peninjauan data selesai.'
-
     default:
       return ''
   }

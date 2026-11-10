@@ -549,16 +549,46 @@ async function fetchHistory(channelId, start, end, signal) {
   };
 }
 
+function buildTimeRange(chosenDay, hours, endHour, latest) {
+  const day = chosenDay || latest?.slice(0, 10) || '';
+  const endDay = nextDay(day);
+
+  const endMs = endDay
+    ? Date.parse(`${endDay}T00:00:00Z`) -
+      (24 - endHour) * 3600000
+    : NaN;
+
+  const latestDay = latest?.slice(0, 10) || '';
+  const latestEndDay = nextDay(latestDay);
+
+  const latestEndMs = latestEndDay
+    ? Date.parse(`${latestEndDay}T00:00:00Z`)
+    : NaN;
+
+  const startMs = endMs - hours * 3600000;
+
+  const start = Number.isFinite(startMs)
+    ? new Date(startMs).toISOString().slice(0, 19)
+    : '';
+
+  const end = Number.isFinite(endMs)
+    ? new Date(endMs).toISOString().slice(0, 19)
+    : '';
+
+  return { day, hours, start, end, startMs, endMs, latestEndMs };
+}
+
 function History({
   parameter,
   parameters = [],
   revision,
   mode = 'monitoring',
   onSelect,
+  range,
+  setChosenDay,
+  setHours,
+  setEndHour,
 }) {
-  const [chosenDay, setChosenDay] = useState('');
-  const [hours, setHours] = useState(24);
-  const [endHour, setEndHour] = useState(24);
   const [retry, setRetry] = useState(0);
   const [hiddenIds, setHiddenIds] = useState([]);
 
@@ -591,36 +621,7 @@ function History({
     .sort((a, b) => a - b)
     .join(',');
 
-  const latest = readingParameters
-    .map((item) => item.latest_time)
-    .filter(Boolean)
-    .sort()
-    .at(-1);
-
-  const day = chosenDay || latest?.slice(0, 10) || '';
-  const endDay = nextDay(day);
-
-  const endMs = endDay
-    ? Date.parse(`${endDay}T00:00:00Z`) -
-      (24 - endHour) * 3600000
-    : NaN;
-
-  const latestDay = latest?.slice(0, 10) || '';
-  const latestEndDay = nextDay(latestDay);
-
-  const latestEndMs = latestEndDay
-    ? Date.parse(`${latestEndDay}T00:00:00Z`)
-    : NaN;
-
-  const startMs = endMs - hours * 3600000;
-
-  const start = Number.isFinite(startMs)
-    ? new Date(startMs).toISOString().slice(0, 19)
-    : '';
-
-  const end = Number.isFinite(endMs)
-    ? new Date(endMs).toISOString().slice(0, 19)
-    : '';
+  const { day, hours, start, end, startMs, endMs, latestEndMs } = range;
 
   const key = `${idsKey}|${start}|${end}|${revision}|${retry}`;
 
@@ -1221,6 +1222,9 @@ function History({
 }
 
 function UnitData({ unitId, mode = 'monitoring' }) {
+  const [chosenDay, setChosenDay] = useState('');
+  const [hours, setHours] = useState(24);
+  const [endHour, setEndHour] = useState(24);
   const [revision, setRevision] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
 
@@ -1252,6 +1256,17 @@ function UnitData({ unitId, mode = 'monitoring' }) {
     .filter(Boolean)
     .sort()
     .at(-1);
+
+  // Use the same endpoint as the vibration graph; fall back to other data
+  // when this unit does not yet have vibration measurements.
+  const latestVibration = vibrations
+    .map((item) => item.latest_time)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  const range = buildTimeRange(
+    chosenDay, hours, endHour, latestVibration || latest,
+  );
 
   const isAnalysis = mode === 'analysis';
 
@@ -1295,6 +1310,21 @@ function UnitData({ unitId, mode = 'monitoring' }) {
             </p>
           )}
 
+          {!isAnalysis && !selected && (
+            <label className="hml-field">
+              Tanggal data voltage (24 jam)
+              <input
+                type="date"
+                value={range.day}
+                onChange={(event) => {
+                  setChosenDay(event.target.value);
+                  setHours(24);
+                  setEndHour(24);
+                }}
+              />
+            </label>
+          )}
+
           {!isAnalysis && (
             <section
               className="hml-operations"
@@ -1306,6 +1336,10 @@ function UnitData({ unitId, mode = 'monitoring' }) {
                       key={title}
                       unitId={unitId}
                       parameters={parameters}
+                      start={range.start}
+                      end={range.end}
+                      revision={revision}
+                      loadHistory={fetchHistory}
                     />
                   ) : (
                     <Metric
@@ -1327,6 +1361,10 @@ function UnitData({ unitId, mode = 'monitoring' }) {
               revision={revision}
               mode={mode}
               onSelect={setSelectedId}
+              range={range}
+              setChosenDay={setChosenDay}
+              setHours={setHours}
+              setEndHour={setEndHour}
             />
           ) : (
             <section className="hml-panel">
