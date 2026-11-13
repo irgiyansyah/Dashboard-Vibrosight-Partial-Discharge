@@ -40,7 +40,10 @@
   color: #c9d8eb;
 }
 
-.dashboard .nav-item {
+.dashboard .sidebar .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   color: #e0e9f5;
 }
 
@@ -59,6 +62,26 @@
 }
 
 .dashboard .nav-item.active .nav-index {
+  color: #14325c;
+}
+
+.dashboard .sidebar .nav-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  color: #b8dff0;
+}
+
+.dashboard .sidebar .nav-label {
+  line-height: 1.4;
+}
+
+.dashboard .sidebar .nav-item:hover .nav-icon {
+  color: #ffffff;
+}
+
+.dashboard .sidebar .nav-item.active .nav-icon {
   color: #14325c;
 }
 
@@ -113,12 +136,10 @@
   background: #555555;
 }
 
-/* Hilangkan bar Workspace dan profil */
 .dashboard .main-layout > .topbar {
   display: none;
 }
 
-/* Sesuaikan tinggi monitoring setelah topbar dihilangkan */
 .dashboard .main-layout > main.unit-monitoring-page .hm-app {
   min-height: 100vh;
 }
@@ -232,7 +253,8 @@
 .dashboard button:focus-visible,
 .dashboard select:focus-visible,
 .dashboard input:focus-visible,
-.dashboard a:focus-visible {
+.dashboard a:focus-visible,
+.dashboard summary:focus-visible {
   outline: 2px solid #14325c;
   outline-offset: 3px;
 }
@@ -242,7 +264,7 @@
 }
 
 /* =========================================
-   UNIT MONITORING
+   UNIT MONITORING — TEMA DASAR
    ========================================= */
 
 .main-layout > main.unit-monitoring-page {
@@ -255,8 +277,6 @@
   --border: #d6e0eb;
   --text: #14325c;
   --muted: #555555;
-
-  /* Kompatibilitas dengan CSS komponen lama */
   --green: #14325c;
 
   --channel-tgb: #14325c;
@@ -311,7 +331,6 @@
   color: #555555;
 }
 
-/* Badge prototipe, bukan status alarm mesin */
 .hm-app .hm-tag.amber {
   background: #e2f4fc;
   color: #14325c;
@@ -325,11 +344,14 @@
   border-top: 3px solid #3cb5e5;
 }
 
-.hm-app .hm-kpi > div {
+.hm-app .hm-kpi > div,
+.hm-app .hm-threshold-note,
+.hm-app .hm-legend button {
   color: #555555;
 }
 
-.hm-app .hm-kpi > strong {
+.hm-app .hm-kpi > strong,
+.hm-app .hm-bearing-bottom b {
   color: #14325c;
 }
 
@@ -339,14 +361,6 @@
 
 .hm-app .hm-svg-label {
   fill: #555555;
-}
-
-.hm-app .hm-bearing-bottom b {
-  color: #14325c;
-}
-
-.hm-app .hm-threshold-note {
-  color: #555555;
 }
 
 .hm-app .hm-periods {
@@ -360,10 +374,6 @@
 .hm-app .hm-periods .is-active {
   background: #14325c;
   color: #ffffff;
-}
-
-.hm-app .hm-legend button {
-  color: #555555;
 }
 
 .hm-app .hm-chart-message {
@@ -435,7 +445,7 @@
 }
 
 /* =========================================
-   KOMPATIBILITAS WARNA GRAFIK VERSI LAMA
+   COMPATIBILITAS GRAFIK VERSI LAMA
    ========================================= */
 
 .hm-app [stroke="#2a3949"],
@@ -468,7 +478,6 @@
   fill: var(--channel-lgb);
 }
 
-/* Urutan kanal: TGB X/Y, UGB X/Y, LGB X/Y */
 .hm-app .hm-bearing:nth-child(1) .hm-bearing-title > i {
   background: var(--channel-tgb) !important;
 }
@@ -506,7 +515,7 @@
 }
 
 /* =========================================
-   LOGO VALE — TANPA BACKGROUND PUTIH
+   LOGO VALE
    ========================================= */
 
 .dashboard .brand.vale-brand,
@@ -520,7 +529,6 @@
   flex-shrink: 0;
 }
 
-/* Pembungkus logo transparan */
 .dashboard .sidebar .brand.vale-brand .vale-logo-plate,
 .dashboard .hm-app .hm-header .hm-brand.vale-brand .vale-logo-plate,
 .hm-app .hm-brand.vale-brand .vale-logo-plate {
@@ -537,7 +545,6 @@
   overflow: hidden;
 }
 
-/* Gambar logo tidak diberi background atau filter warna */
 .dashboard .sidebar .vale-logo,
 .dashboard .hm-header .vale-logo,
 .hm-app .hm-header .vale-logo {
@@ -550,7 +557,6 @@
   object-position: center;
 }
 
-/* Ukuran mengikuti gambar logo persegi yang dikirim */
 .dashboard .sidebar .vale-logo {
   width: 136px;
   height: 60px;
@@ -596,15 +602,12 @@
 }
 
 /* =========================================
-   SUSUNAN HEADER UNIT MONITORING
+   HEADER UNIT MONITORING
    ========================================= */
 
 .dashboard .hm-app .hm-header {
   display: grid;
-  grid-template-columns:
-    minmax(0, 1fr)
-    auto
-    minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 24px;
   padding: 18px 28px;
@@ -630,16 +633,329 @@
 }
 
 /* =========================================
+   PARAMETER OPERASI — KARTU SERAGAM
+   ========================================= */
+
+.dashboard .hml-operations {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 12px;
+}
+
+.dashboard .hml-operations > .hml-metric {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  align-self: stretch;
+  gap: 0;
+  min-width: 0;
+  height: auto;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #d6e0eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #14325c;
+  box-shadow: none;
+  text-align: left;
+}
+
+/* Judul: sama untuk seluruh kartu */
+.dashboard .hml-operations > .hml-metric > span:first-child,
+.dashboard .hml-operations .current-clean-title {
+  display: block;
+  margin: 0 0 10px;
+  color: #14325c;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Nilai: ukuran dan format angka seragam */
+.dashboard .hml-operations > .hml-metric > strong,
+.dashboard .hml-operations .current-clean-reading strong {
+  display: block;
+  margin: 0;
+  color: #14325c;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* Keterangan tidak dipotong atau disembunyikan */
+.dashboard .hml-operations > .hml-metric > small {
+  display: block;
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* =========================================
+   ARUS — TAMPILAN RINGKAS
+   Berlaku pada Monitoring dan Overview
+   ========================================= */
+
+.current-clean {
+  min-width: 0;
+  color: #14325c;
+  text-align: left;
+}
+
+.current-clean .current-clean-heading {
+  display: block;
+  margin: 0;
+}
+
+.current-clean .current-clean-title {
+  display: block;
+  margin: 0 0 10px;
+  color: #14325c;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Status historis sudah ditampilkan di halaman */
+.current-clean .current-clean-caption,
+.current-clean .current-clean-badge {
+  display: none;
+}
+
+.current-clean .current-clean-date {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.current-clean-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.current-clean-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 0;
+  border: 0;
+  border-bottom: 1px solid #e8eef5;
+  border-radius: 0;
+  background: transparent;
+}
+
+.current-clean-row:last-child {
+  border-bottom: 0;
+}
+
+.current-clean-label {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.current-clean-reading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.current-clean .current-clean-reading strong {
+  margin: 0;
+  color: #14325c;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.current-clean-unit {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.current-clean-row-note {
+  grid-column: 1 / -1;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.current-clean .current-clean-footnote {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* Jika detail masih digunakan, isinya dapat digulir
+   sehingga tidak membuat seluruh baris sangat tinggi. */
+.current-clean-details {
+  max-height: 180px;
+  overflow-y: auto;
+  margin-top: 10px;
+  padding: 8px 2px 2px;
+  border-top: 1px solid #e5edf5;
+}
+
+.current-clean-details summary {
+  width: fit-content;
+  color: #24638e;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.current-clean-details p {
+  margin: 8px 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.current-clean-detail-item {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+  color: #64748b;
+  font-size: 11px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.current-clean-detail-item b {
+  color: #334155;
+}
+
+.current-clean-detail-item code {
+  color: #475569;
+  font-size: 10px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* =========================================
+   ARUS — TABEL RINGKASAN OVERVIEW
+   ========================================= */
+
+.current-clean-summary {
+  min-width: 180px;
+}
+
+.current-clean-summary .current-clean-list {
+  margin: 0;
+}
+
+.current-clean-summary .current-clean-row {
+  padding: 5px 0;
+}
+
+.current-clean-summary .current-clean-reading strong {
+  color: #14325c;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Dukungan jika Overview masih menggunakan
+   struktur CurrentMetric versi awal */
+[data-current="overview"] > span {
+  display: block;
+  margin-bottom: 10px;
+  color: #14325c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-current="overview"] > small {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+[data-current] > [data-current-tag] {
+  min-width: 0;
+  padding: 7px 0;
+  border-bottom: 1px solid #e8eef5;
+}
+
+[data-current] > [data-current-tag]:last-child {
+  border-bottom: 0;
+}
+
+[data-current] > [data-current-tag] > small:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+[data-current] > [data-current-tag] > small + small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+[data-current] > [data-current-tag] b {
+  color: #14325c;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-current="summary"] {
+  min-width: 180px;
+}
+
+[data-current="summary"] > [data-current-tag] b {
+  font-size: 13px;
+}
+
+/* =========================================
    RESPONSIVE
    ========================================= */
 
 @media (max-width: 1600px) {
-  .dashboard .hm-header .vale-brand-copy {
-    display: none;
-  }
-
+  .dashboard .hm-header .vale-brand-copy,
   .dashboard .hm-header .hm-time {
     display: none;
+  }
+}
+
+@media (max-width: 1400px) {
+  .dashboard .hml-operations {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -659,6 +975,10 @@
 }
 
 @media (max-width: 760px) {
+  .dashboard .hml-operations {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .dashboard .hm-app .hm-header {
     padding: 16px;
     gap: 12px;
@@ -680,6 +1000,12 @@
   }
 }
 
+@media (max-width: 480px) {
+  .dashboard .hml-operations {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 380px) {
   .dashboard .hm-app .hm-header {
     grid-template-columns: minmax(0, 1fr);
@@ -689,31 +1015,453 @@
     justify-self: start;
     grid-row: 3;
   }
-  
-  /* Ikon navigasi menggantikan nomor menu */
-.dashboard .sidebar .nav-item {
+}
+.dashboard .hml-operations
+  .voltage-compact > .voltage-compact-value {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0 0 6px;
 }
 
-.dashboard .sidebar .nav-icon {
+.dashboard .voltage-compact .voltage-compact-unit {
+  color: #475569;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.dashboard .hml-reading-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.dashboard .hml-reading-value > .hml-reading-unit {
+  color: #14325c;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+/* Wicket Gate mengikuti gaya kartu parameter */
+
+.dashboard .wg-metric > span:first-child {
   display: block;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  color: #b8dff0;
-}
-
-.dashboard .sidebar .nav-label {
+  margin: 0 0 10px;
+  color: #14325c;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.4;
 }
 
-.dashboard .sidebar .nav-item:hover .nav-icon {
-  color: #ffffff;
+.wg-readings {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
 }
 
-.dashboard .sidebar .nav-item.active .nav-icon {
-  color: #14325c;
+.wg-reading + .wg-reading {
+  padding-top: 10px;
+  border-top: 1px solid #e8eef5;
 }
+
+.wg-label {
+  display: block;
+  margin-bottom: 4px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.dashboard .wg-metric .wg-value {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  color: #14325c;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard .wg-metric .wg-unit {
+  color: #475569;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.wg-reading > small,
+.dashboard .wg-metric > .wg-note {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+/* =========================================
+   PERAPIAN OVERVIEW
+   Tambahkan di akhir MentorTheme.css
+   ========================================= */
+
+.ho-overview.ho-overview {
+  --ho-bg: #f3f6fa;
+  --ho-text: #16345b;
+  --ho-muted: #526984;
+  --ho-border: #d6e2ee;
+
+  container-type: inline-size;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* Ringkasan */
+
+.ho-overview.ho-overview .ho-summary {
+  gap: 16px;
+  margin: 22px 0;
+}
+
+.ho-overview.ho-overview .ho-kpi {
+  padding: 18px;
+  border-radius: 12px;
+}
+
+.ho-overview.ho-overview .ho-summary-heading,
+.ho-overview.ho-overview .ho-plant-heading {
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ho-overview.ho-overview .ho-plant {
+  margin-top: 28px;
+}
+
+/* Satu unit per baris */
+
+.ho-overview.ho-overview .ho-unit-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+.ho-overview.ho-overview .ho-unit {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 0.85fr)
+    minmax(0, 1.15fr);
+
+  grid-template-areas:
+    "heading time"
+    "warning warning"
+    "operations vibration"
+    "temperature pd"
+    "detail detail";
+
+  column-gap: 24px;
+  padding: 22px;
+  border: 1px solid var(--ho-border);
+  border-top: 3px solid #32b3df;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 3px 12px rgb(22 52 91 / 4%);
+}
+
+/* Identitas dan waktu unit */
+
+.ho-overview.ho-overview .ho-unit-head {
+  grid-area: heading;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.ho-overview.ho-overview .ho-unit-head h3 {
+  margin-top: 2px;
+  font-size: 24px;
+}
+
+.ho-overview.ho-overview .ho-unit-time {
+  grid-area: time;
+  align-self: center;
+  justify-content: flex-end;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.ho-overview.ho-overview .ho-unit > .ho-warning {
+  grid-area: warning;
+  margin: 12px 0 0;
+}
+
+/* Parameter operasi */
+
+.ho-overview.ho-overview .ho-parameters {
+  grid-area: operations;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+  margin-top: 20px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.ho-overview.ho-overview .ho-parameters > * {
+  min-width: 0;
+  height: auto;
+  margin: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--ho-border);
+  border-radius: 9px;
+  background: #f8fafd;
+  overflow-wrap: anywhere;
+}
+
+.ho-overview.ho-overview .ho-parameter > span {
+  min-height: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ho-overview.ho-overview .ho-parameter > strong {
+  margin: 8px 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.ho-overview.ho-overview .ho-parameter strong small {
+  font-size: 14px;
+}
+
+.ho-overview.ho-overview .ho-parameter :is(small, time) {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Arus generator */
+
+.ho-overview.ho-overview .ho-parameters .current-clean-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 7px 0;
+  background: transparent;
+}
+
+.ho-overview.ho-overview .ho-parameters .current-clean-row strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ho-overview.ho-overview .ho-parameters .wg-metric {
+  min-width: 0;
+}
+
+/* Pembagian bagian dalam kartu */
+
+.ho-overview.ho-overview .ho-unit > .ho-section {
+  min-width: 0;
+  margin-top: 20px;
+  padding-top: 16px;
+}
+
+.ho-overview.ho-overview .ho-unit > .ho-section:nth-of-type(1) {
+  grid-area: vibration;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.ho-overview.ho-overview .ho-unit > .ho-section:nth-of-type(2) {
+  grid-area: temperature;
+}
+
+.ho-overview.ho-overview .ho-unit > .ho-pd {
+  grid-area: pd;
+  align-self: start;
+}
+
+.ho-overview.ho-overview .ho-section-heading {
+  margin-bottom: 12px;
+}
+
+.ho-overview.ho-overview .ho-section-heading h4 {
+  font-size: 14px;
+}
+
+/* Indikator jarum */
+
+.ho-overview.ho-overview .ho-gauge-reference {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* Enam sensor: tiga kolom, dua baris */
+
+.ho-overview.ho-overview .ho-gauge-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 12px;
+}
+
+/* Dua atau empat sensor: dua kolom */
+
+.ho-overview.ho-overview
+.ho-gauge-grid:not(:has(> :nth-child(5))) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ho-overview.ho-overview .ho-gauge {
+  padding: 14px 10px;
+  border-radius: 10px;
+  background: #f8fafd;
+}
+
+.ho-overview.ho-overview .ho-gauge-heading {
+  align-items: center;
+  min-height: 36px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ho-overview.ho-overview .ho-gauge-dial {
+  width: 100%;
+  max-width: 175px;
+  margin: 4px auto;
+}
+
+.ho-overview.ho-overview .ho-gauge-value {
+  font-size: 27px;
+  line-height: 1.25;
+}
+
+.ho-overview.ho-overview .ho-gauge-unit {
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+.ho-overview.ho-overview :is(
+  .ho-gauge-scale,
+  .ho-gauge-quality,
+  .ho-gauge time
+) {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Temperatur dan pembacaan lainnya */
+
+.ho-overview.ho-overview .ho-reading-list {
+  gap: 10px;
+}
+
+.ho-overview.ho-overview .ho-reading {
+  padding: 10px 12px;
+  background: #f8fafd;
+}
+
+/* Tombol detail */
+
+.ho-overview.ho-overview .ho-detail {
+  grid-area: detail;
+  justify-self: end;
+  width: auto;
+  max-width: 100%;
+  min-height: 42px;
+  margin-top: 20px;
+  padding: 10px 16px;
+  gap: 16px;
+}
+
+.ho-overview.ho-overview .ho-unit-error {
+  grid-area: operations;
+  grid-column: 1 / -1;
+  min-height: 180px;
+}
+
+/* Tabel ringkasan */
+
+.ho-overview.ho-overview .ho-table-scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.ho-overview.ho-overview.ho-overview table {
+  min-width: 1120px;
+}
+
+.ho-overview.ho-overview.ho-overview table :is(th, td) {
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.ho-overview.ho-overview .ho-table-values {
+  gap: 6px 12px;
+  font-size: 12px;
+}
+
+/* Responsif mengikuti lebar area konten */
+
+@container (max-width: 1050px) {
+  .ho-overview.ho-overview .ho-unit {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "heading"
+      "time"
+      "warning"
+      "operations"
+      "vibration"
+      "temperature"
+      "pd"
+      "detail";
+  }
+
+  .ho-overview.ho-overview .ho-unit-time {
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+
+  .ho-overview.ho-overview .ho-parameters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .ho-overview.ho-overview
+  .ho-unit > .ho-section:nth-of-type(1) {
+    padding-top: 18px;
+    border-top: 1px solid var(--ho-border);
+  }
+}
+
+@container (max-width: 740px) {
+  .ho-overview.ho-overview .ho-summary,
+  .ho-overview.ho-overview .ho-parameters,
+  .ho-overview.ho-overview .ho-gauge-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ho-overview.ho-overview .ho-unit {
+    padding: 16px;
+  }
+}
+
+@container (max-width: 360px) {
+  .ho-overview.ho-overview .ho-parameters,
+  .ho-overview.ho-overview .ho-gauge-grid,
+  .ho-overview.ho-overview
+  .ho-gauge-grid:not(:has(> :nth-child(5))),
+  .ho-overview.ho-overview .ho-reading-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ho-overview.ho-overview .ho-detail {
+    width: 100%;
+  }
 }

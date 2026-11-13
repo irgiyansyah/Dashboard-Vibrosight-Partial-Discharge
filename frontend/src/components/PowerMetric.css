@@ -1,0 +1,38 @@
+.power-metric .power-title {
+  display: block;
+  color: #16345b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.power-metric .power-reading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 8px;
+  color: #16345b;
+}
+
+.power-metric .power-reading strong {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.power-metric .power-reading > span {
+  color: #16345b;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.power-metric .power-time,
+.power-metric .power-note {
+  display: block;
+  margin-top: 5px;
+  color: #526984;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

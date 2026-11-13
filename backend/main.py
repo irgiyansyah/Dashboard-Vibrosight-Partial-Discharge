@@ -3,16 +3,23 @@ import logging
 import pymysql
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
+from wicket_gate_routes import router as wicket_gate_router
 from database import get_connection
 from import_routes import router as import_router
 from monitoring_routes import router as monitoring_router
 from tgb_routes import router as tgb_router
 from voltage_routes import router as voltage_router 
+from current_routes import router as current_router
+from speed_routes import router as speed_router
+from power_routes import router as power_router
 
 app = FastAPI(title="Hydro Insight API")
 app.include_router(tgb_router)
 app.include_router(voltage_router)
+app.include_router(current_router)
+app.include_router(wicket_gate_router)
+app.include_router(speed_router)
+app.include_router(power_router)
 logger = logging.getLogger("uvicorn.error")
 
 

@@ -11,7 +11,12 @@ import {
 } from 'recharts';
 
 import './HydroMonitoring.css';
+
 import VoltageMetric from './VoltageMetric';
+import CurrentMetric from './CurrentMetric';
+import WicketGateMetric from './WicketGateMetric';
+import SpeedMetric from './SpeedMetric';
+import PowerMetric from './PowerMetric';
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
@@ -82,7 +87,11 @@ function category(parameter) {
   const tag = parameter.tag_name || '';
 
   if (/VIB/i.test(tag)) return 'vibration';
-  if (/TEMP|TMP|TGB-Pad|_TE_/i.test(tag)) return 'temperature';
+
+  if (/TEMP|TMP|TGB-Pad|_TE_/i.test(tag)) {
+    return 'temperature';
+  }
+
   if (/SPEED/i.test(tag)) return 'speed';
 
   return 'other';
@@ -174,8 +183,15 @@ function vibrationStyle(parameter) {
 
   return {
     name: axis ? `${group} ${axis}` : group,
-    color: colors[group] || fallbackColors[hash % fallbackColors.length],
-    dash: axis === 'Y' ? '5 4' : axis === 'Z' ? '2 4' : undefined,
+    color:
+      colors[group] ||
+      fallbackColors[hash % fallbackColors.length],
+    dash:
+      axis === 'Y'
+        ? '5 4'
+        : axis === 'Z'
+          ? '2 4'
+          : undefined,
   };
 }
 
@@ -208,13 +224,20 @@ function useApi(path, revision = 0) {
         });
 
         if (!response.ok) {
-          throw new Error(`API merespons HTTP ${response.status}.`);
+          throw new Error(
+            `API merespons HTTP ${response.status}.`,
+          );
         }
 
         const value = await response.json();
 
-        if (value.status !== 'ok' || !Array.isArray(value.data)) {
-          throw new Error('Format respons API tidak sesuai.');
+        if (
+          value.status !== 'ok' ||
+          !Array.isArray(value.data)
+        ) {
+          throw new Error(
+            'Format respons API tidak sesuai.',
+          );
         }
 
         if (active) {
@@ -286,7 +309,9 @@ function Reading({
 
   return (
     <article
-      className={`hml-reading ${selected ? 'is-selected' : ''}`}
+      className={`hml-reading ${
+        selected ? 'is-selected' : ''
+      }`}
     >
       <div className="hml-reading-head">
         <strong>{label(parameter)}</strong>
@@ -302,14 +327,26 @@ function Reading({
         )}
       </div>
 
-      <p className="hml-reading-value">{number(value)}</p>
+      <p className="hml-reading-value">
+        <span>{number(value)}</span>
 
-      <small>
-        {parameter.engineering_unit || 'Satuan belum dikonfirmasi'}
-      </small>
+        {parameter.engineering_unit && (
+          <span className="hml-reading-unit">
+            {parameter.engineering_unit}
+            {/peak-to-peak/i.test(
+              parameter.measurement_definition || '',
+            ) && ' p-p'}
+          </span>
+        )}
+      </p>
+
+      {!parameter.engineering_unit && (
+        <small>Satuan belum dikonfirmasi</small>
+      )}
 
       <p className="hml-muted">
-        {message || `${quality} · ${time(parameter.latest_time)}`}
+        {message ||
+          `${quality} · ${time(parameter.latest_time)}`}
       </p>
     </article>
   );
@@ -387,15 +424,15 @@ function resolveReading(
 }
 
 function HistoryReadings({
-  parameters,
+  parameters = [],
   selectedId,
   onSelect,
   mode,
   ready,
   start,
   end,
-  results,
-  errors,
+  results = {},
+  errors = {},
 }) {
   const isAnalysis = mode === 'analysis';
 
@@ -478,7 +515,9 @@ async function fetchHistory(channelId, start, end, signal) {
     );
 
     if (!response.ok) {
-      throw new Error(`API merespons HTTP ${response.status}.`);
+      throw new Error(
+        `API merespons HTTP ${response.status}.`,
+      );
     }
 
     const page = await response.json();
@@ -489,7 +528,9 @@ async function fetchHistory(channelId, start, end, signal) {
       !page.analysis?.summary ||
       typeof page.pagination?.has_more !== 'boolean'
     ) {
-      throw new Error('Format respons riwayat tidak sesuai.');
+      throw new Error(
+        'Format respons riwayat tidak sesuai.',
+      );
     }
 
     if (!firstPage) firstPage = page;
@@ -502,7 +543,8 @@ async function fetchHistory(channelId, start, end, signal) {
         !Number.isFinite(timestamp) ||
         timestamp < startMs ||
         timestamp >= endMs ||
-        (previous && row.measured_at <= previous.measured_at)
+        (previous &&
+          row.measured_at <= previous.measured_at)
       ) {
         throw new Error(
           'Urutan atau rentang waktu data tidak sesuai. Muat ulang.',
@@ -529,14 +571,17 @@ async function fetchHistory(channelId, start, end, signal) {
       next !== last.measured_at ||
       (after && next <= after)
     ) {
-      throw new Error('Halaman lanjutan data tidak valid.');
+      throw new Error(
+        'Halaman lanjutan data tidak valid.',
+      );
     }
 
     after = next;
   }
 
   if (
-    rows.length !== Number(firstPage.analysis.summary.total_count)
+    rows.length !==
+    Number(firstPage.analysis.summary.total_count)
   ) {
     throw new Error(
       'Jumlah data berubah atau belum lengkap. Muat ulang riwayat.',
@@ -575,7 +620,15 @@ function buildTimeRange(chosenDay, hours, endHour, latest) {
     ? new Date(endMs).toISOString().slice(0, 19)
     : '';
 
-  return { day, hours, start, end, startMs, endMs, latestEndMs };
+  return {
+    day,
+    hours,
+    start,
+    end,
+    startMs,
+    endMs,
+    latestEndMs,
+  };
 }
 
 function History({
@@ -601,10 +654,14 @@ function History({
   const selectedMetadata = metadataKey(parameter);
 
   const series = useMemo(() => {
-    const source = parameters.length ? parameters : [parameter];
+    const source = parameters.length
+      ? parameters
+      : [parameter];
 
     return source
-      .filter((item) => metadataKey(item) === selectedMetadata)
+      .filter(
+        (item) => metadataKey(item) === selectedMetadata,
+      )
       .map((item) => ({
         ...item,
         style: vibrationStyle(item),
@@ -621,9 +678,18 @@ function History({
     .sort((a, b) => a - b)
     .join(',');
 
-  const { day, hours, start, end, startMs, endMs, latestEndMs } = range;
+  const {
+    day,
+    hours,
+    start,
+    end,
+    startMs,
+    endMs,
+    latestEndMs,
+  } = range;
 
-  const key = `${idsKey}|${start}|${end}|${revision}|${retry}`;
+  const key =
+    `${idsKey}|${start}|${end}|${revision}|${retry}`;
 
   useEffect(() => {
     if (!idsKey || !start || !end) return;
@@ -742,7 +808,9 @@ function History({
   );
 
   const failedSeries = current
-    ? series.filter((item) => state.errors[item.channel_id])
+    ? series.filter(
+        (item) => state.errors[item.channel_id],
+      )
     : [];
 
   const summary = current
@@ -750,7 +818,8 @@ function History({
     : null;
 
   const engineeringUnit =
-    parameter.engineering_unit || 'satuan belum dikonfirmasi';
+    parameter.engineering_unit ||
+    'satuan belum dikonfirmasi';
 
   const metadataUnconfirmed =
     !parameter.engineering_unit ||
@@ -761,7 +830,8 @@ function History({
     parameters.length - series.length,
   );
 
-  const rangeLabel = hours === 168 ? '7 hari' : `${hours} jam`;
+  const rangeLabel =
+    hours === 168 ? '7 hari' : `${hours} jam`;
 
   const ticks = Number.isFinite(startMs)
     ? Array.from(
@@ -785,7 +855,10 @@ function History({
       return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
     }
 
-    if (tickMs === endMs && clockText === '00:00') {
+    if (
+      tickMs === endMs &&
+      clockText === '00:00'
+    ) {
       return '24:00';
     }
 
@@ -795,7 +868,9 @@ function History({
   function tooltipLabel(tick) {
     if (!Number.isFinite(Number(tick))) return '';
 
-    return time(new Date(Number(tick)).toISOString());
+    return time(
+      new Date(Number(tick)).toISOString(),
+    );
   }
 
   function toggleSeries(channelId) {
@@ -835,7 +910,10 @@ function History({
         return;
       }
 
-      targetEndMs = Math.min(targetEndMs, latestEndMs);
+      targetEndMs = Math.min(
+        targetEndMs,
+        latestEndMs,
+      );
     }
 
     applyWindowEnd(targetEndMs);
@@ -873,8 +951,10 @@ function History({
         <div className="hml-section-head">
           <div>
             <h2>Vibration Trend · {rangeLabel}</h2>
+
             <p>
-              {series.length} pengukuran · X garis utuh · Y putus-putus
+              {series.length} pengukuran · X garis utuh ·
+              Y putus-putus
             </p>
           </div>
 
@@ -903,7 +983,9 @@ function History({
                 key={option.hours}
                 type="button"
                 className={
-                  hours === option.hours ? 'is-active' : ''
+                  hours === option.hours
+                    ? 'is-active'
+                    : ''
                 }
                 aria-pressed={hours === option.hours}
                 onClick={() => setHours(option.hours)}
@@ -920,9 +1002,11 @@ function History({
           {start && end
             ? `${time(start)} sampai sebelum ${time(end)}.`
             : 'Pilih tanggal data.'}
-          {' '}Gunakan tombol di bawah grafik untuk menggeser rentang.
-          Memilih tanggal secara manual mengatur akhir rentang ke 24:00.
-          Waktu mengikuti sumber; zona waktu belum dikonfirmasi.
+          {' '}Gunakan tombol di bawah grafik untuk
+          menggeser rentang. Memilih tanggal secara
+          manual mengatur akhir rentang ke 24:00.
+          Waktu mengikuti sumber; zona waktu belum
+          dikonfirmasi.
         </p>
 
         <div
@@ -931,7 +1015,9 @@ function History({
           aria-label="Tampilkan atau sembunyikan kurva"
         >
           {series.map((item) => {
-            const hidden = hiddenIds.includes(item.channel_id);
+            const hidden = hiddenIds.includes(
+              item.channel_id,
+            );
 
             return (
               <button
@@ -942,9 +1028,15 @@ function History({
                 title={`${item.tag_name} — ${
                   hidden ? 'Tampilkan' : 'Sembunyikan'
                 } kurva`}
-                onClick={() => toggleSeries(item.channel_id)}
+                onClick={() =>
+                  toggleSeries(item.channel_id)
+                }
               >
-                <svg width="30" height="12" aria-hidden="true">
+                <svg
+                  width="30"
+                  height="12"
+                  aria-hidden="true"
+                >
                   <line
                     x1="1"
                     y1="6"
@@ -963,56 +1055,64 @@ function History({
         </div>
 
         <p className="hml-note">
-          Klik legenda untuk menampilkan atau menyembunyikan kurva.
-          Nama singkat mengikuti tag sumber.
+          Klik legenda untuk menampilkan atau
+          menyembunyikan kurva. Nama singkat mengikuti
+          tag sumber.
         </p>
 
         {metadataUnconfirmed && (
           <p className="hml-notice">
             Satuan atau definisi amplitudo belum lengkap.
-            Perbandingan antarkurva masih sementara sampai metadata
-            setiap pengukuran dikonfirmasi.
+            Perbandingan antarkurva masih sementara
+            sampai metadata setiap pengukuran
+            dikonfirmasi.
           </p>
         )}
 
         {differentMetadataCount > 0 && (
           <p className="hml-note">
-            {differentMetadataCount} pengukuran memiliki metadata
-            satuan atau definisi amplitudo berbeda. Pilih pengukurannya
-            di sebelah kiri untuk melihat kelompok tersebut.
+            {differentMetadataCount} pengukuran memiliki
+            metadata satuan atau definisi amplitudo
+            berbeda. Pilih pengukurannya di sebelah kiri
+            untuk melihat kelompok tersebut.
           </p>
         )}
 
         {loading && (
           <p className="hml-message" role="status">
-            Memuat seluruh kurva untuk rentang {rangeLabel}…
+            Memuat seluruh kurva untuk rentang{' '}
+            {rangeLabel}…
           </p>
         )}
 
         {!start && (
           <p className="hml-message">
-            Belum ada tanggal pengukuran untuk kelompok ini.
+            Belum ada tanggal pengukuran untuk kelompok
+            ini.
           </p>
         )}
 
         {failedSeries.length > 0 && (
           <div className="hml-message" role="alert">
             <p>
-              Sebagian kurva gagal dimuat. Kurva yang berhasil tetap
-              ditampilkan.
+              Sebagian kurva gagal dimuat. Kurva yang
+              berhasil tetap ditampilkan.
             </p>
 
             <ul>
               {failedSeries.map((item) => (
                 <li key={item.channel_id}>
-                  {item.tag_name}: {state.errors[item.channel_id]}
+                  {item.tag_name}:{' '}
+                  {state.errors[item.channel_id]}
                 </li>
               ))}
             </ul>
 
             <button
               type="button"
-              onClick={() => setRetry((value) => value + 1)}
+              onClick={() =>
+                setRetry((value) => value + 1)
+              }
             >
               Coba lagi
             </button>
@@ -1033,7 +1133,10 @@ function History({
                   visibleSeries.length
                 } kurva dipilih`}
               >
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
                   <LineChart
                     data={chartRows}
                     margin={{
@@ -1101,7 +1204,6 @@ function History({
           </>
         )}
 
-        {/* Navigasi berada setelah grafik dan sebelum statistik. */}
         <div
           className="hml-time-navigation"
           role="group"
@@ -1110,7 +1212,9 @@ function History({
           <div className="hml-navigation-actions">
             <button
               type="button"
-              disabled={loading || !Number.isFinite(endMs)}
+              disabled={
+                loading || !Number.isFinite(endMs)
+              }
               onClick={() => moveWindow(-1)}
               aria-label={`Mundur ${rangeLabel}`}
             >
@@ -1162,14 +1266,18 @@ function History({
           <>
             <div className="hml-stat-heading">
               <strong>
-                Statistik pengukuran: {vibrationStyle(parameter).name}
+                Statistik pengukuran:{' '}
+                {vibrationStyle(parameter).name}
               </strong>
 
               <small>{label(parameter)}</small>
 
-              {hiddenIds.includes(parameter.channel_id) && (
+              {hiddenIds.includes(
+                parameter.channel_id,
+              ) && (
                 <small>
-                  Kurva ini disembunyikan; statistik tetap ditampilkan.
+                  Kurva ini disembunyikan; statistik
+                  tetap ditampilkan.
                 </small>
               )}
             </div>
@@ -1195,26 +1303,30 @@ function History({
             </div>
 
             <p className="hml-note">
-              Dianalisis: {number(summary.analyzed_count)} dari{' '}
+              Dianalisis:{' '}
+              {number(summary.analyzed_count)} dari{' '}
               {number(summary.total_count)} pengukuran.
-              {' '}Dikecualikan: {number(summary.excluded_count)}.
-              {' '}Statistik hanya untuk pengukuran terpilih selama
-              seluruh rentang.
+              {' '}Dikecualikan:{' '}
+              {number(summary.excluded_count)}.
+              {' '}Statistik hanya untuk pengukuran
+              terpilih selama seluruh rentang.
             </p>
 
             <p className="hml-note">
               Cakupan timestamp pengukuran terpilih:{' '}
-              {time(summary.first_time)} — {time(summary.last_time)}.
-              {' '}Rentang pilihan dapat mencakup tanggal yang belum
-              memiliki data.
+              {time(summary.first_time)} —{' '}
+              {time(summary.last_time)}.
+              {' '}Rentang pilihan dapat mencakup
+              tanggal yang belum memiliki data.
             </p>
           </>
         )}
 
         <p className="hml-note">
-          Nilai suspect, missing, dan invalid tidak diplot.
-          Data unverified masih memerlukan verifikasi.
-          Batas normal, alarm, dan trip belum diterapkan.
+          Nilai suspect, missing, dan invalid tidak
+          diplot. Data unverified masih memerlukan
+          verifikasi. Batas normal, alarm, dan trip
+          belum diterapkan.
         </p>
       </section>
     </div>
@@ -1243,13 +1355,10 @@ function UnitData({ unitId, mode = 'monitoring' }) {
     (item) => category(item) === 'temperature',
   );
 
-  const speeds = parameters.filter(
-    (item) => category(item) === 'speed',
-  );
-
   const selected =
-    vibrations.find((item) => item.channel_id === selectedId) ||
-    vibrations[0];
+    vibrations.find(
+      (item) => item.channel_id === selectedId,
+    ) || vibrations[0];
 
   const latest = parameters
     .map((item) => item.latest_time)
@@ -1257,15 +1366,17 @@ function UnitData({ unitId, mode = 'monitoring' }) {
     .sort()
     .at(-1);
 
-  // Use the same endpoint as the vibration graph; fall back to other data
-  // when this unit does not yet have vibration measurements.
   const latestVibration = vibrations
     .map((item) => item.latest_time)
     .filter(Boolean)
     .sort()
     .at(-1);
+
   const range = buildTimeRange(
-    chosenDay, hours, endHour, latestVibration || latest,
+    chosenDay,
+    hours,
+    endHour,
+    latestVibration || latest,
   );
 
   const isAnalysis = mode === 'analysis';
@@ -1283,7 +1394,9 @@ function UnitData({ unitId, mode = 'monitoring' }) {
 
         <button
           type="button"
-          onClick={() => setRevision((value) => value + 1)}
+          onClick={() =>
+            setRevision((value) => value + 1)
+          }
           disabled={loading}
         >
           Muat ulang data
@@ -1306,13 +1419,15 @@ function UnitData({ unitId, mode = 'monitoring' }) {
         <>
           {!value.has_data && (
             <p className="hml-message">
-              Belum ada pengukuran tersimpan untuk unit ini.
+              Belum ada pengukuran tersimpan untuk unit
+              ini.
             </p>
           )}
 
           {!isAnalysis && !selected && (
             <label className="hml-field">
-              Tanggal data voltage (24 jam)
+              Tanggal data parameter (24 jam)
+
               <input
                 type="date"
                 value={range.day}
@@ -1326,32 +1441,65 @@ function UnitData({ unitId, mode = 'monitoring' }) {
           )}
 
           {!isAnalysis && (
-            <section
-              className="hml-operations"
-              aria-label="Parameter operasi"
-            >
-              {PENDING_PARAMETERS.map(([title, detail]) =>
-                  title === 'Voltage' ? (
-                    <VoltageMetric
-                      key={title}
-                      unitId={unitId}
-                      parameters={parameters}
-                      start={range.start}
-                      end={range.end}
-                      revision={revision}
-                      loadHistory={fetchHistory}
-                    />
-                  ) : (
-                    <Metric
-                      key={title}
-                      title={title}
-                      value="—"
-                      detail={`${detail} · belum tersedia`}
-                    />
-                  ),
-                )}
-            </section>
-          )}
+  <section
+    className="hml-operations"
+    aria-label="Parameter operasi"
+  >
+    <PowerMetric
+      unitId={unitId}
+      kind="activePower"
+      parameters={parameters}
+      start={range.start}
+      end={range.end}
+      revision={revision}
+      loadHistory={fetchHistory}
+    />
+
+    <PowerMetric
+      unitId={unitId}
+      kind="reactivePower"
+      parameters={parameters}
+      start={range.start}
+      end={range.end}
+      revision={revision}
+      loadHistory={fetchHistory}
+    />
+
+    <VoltageMetric
+      unitId={unitId}
+      parameters={parameters}
+      start={range.start}
+      end={range.end}
+      revision={revision}
+      loadHistory={fetchHistory}
+    />
+
+    <CurrentMetric
+      unitId={unitId}
+      parameters={parameters}
+      start={range.start}
+      end={range.end}
+      revision={revision}
+      loadHistory={fetchHistory}
+      variant="monitoring"
+    />
+
+    <Metric
+      title="Gap"
+      value="—"
+      detail="Definisi gap perlu dikonfirmasi · belum tersedia"
+    />
+
+    <WicketGateMetric
+      unitId={unitId}
+      parameters={parameters}
+      start={range.start}
+      end={range.end}
+      revision={revision}
+      loadHistory={fetchHistory}
+    />
+  </section>
+)}
 
           {selected ? (
             <History
@@ -1371,7 +1519,8 @@ function UnitData({ unitId, mode = 'monitoring' }) {
               <h2>Tren & analisis getaran</h2>
 
               <p className="hml-message">
-                Data getaran belum tersedia untuk unit ini.
+                Data getaran belum tersedia untuk unit
+                ini.
               </p>
             </section>
           )}
@@ -1397,34 +1546,23 @@ function UnitData({ unitId, mode = 'monitoring' }) {
                 )}
               </section>
 
-              <section className="hml-panel">
-                <h2>Speed</h2>
-
-                {speeds.map((item) => (
-                  <Reading
-                    key={item.channel_id}
-                    parameter={item}
-                  />
-                ))}
-
-                {!speeds.length && (
-                  <p className="hml-message">
-                    Data speed belum tersedia.
-                  </p>
-                )}
-
-                <p className="hml-note">
-                  Satuan mengikuti metadata sumber setelah
-                  dikonfirmasi.
-                </p>
-              </section>
+              <SpeedMetric
+                unitId={unitId}
+                parameters={parameters}
+                start={range.start}
+                end={range.end}
+                revision={revision}
+                loadHistory={fetchHistory}
+                variant="panel"
+              />
             </div>
           )}
 
           <p className="hml-note">
-            Pengelompokan berdasarkan nama tag masih sementara.
-            Nilai suspect, missing, dan invalid tidak ditampilkan
-            sebagai angka operasi. Koneksi live server Vale dan
+            Pengelompokan berdasarkan nama tag masih
+            sementara. Nilai suspect, missing, dan
+            invalid tidak ditampilkan sebagai angka
+            operasi. Koneksi live server Vale dan
             analisis Partial Discharge belum aktif.
           </p>
         </>
@@ -1443,10 +1581,13 @@ export default function HydroMonitoring({
 
   const active =
     units.find(
-      (item) => item[0] === (selectedUnitId ?? localId),
+      (item) =>
+        item[0] === (selectedUnitId ?? localId),
     ) || units[0];
 
-  const plants = [...new Set(units.map((item) => item[1]))];
+  const plants = [
+    ...new Set(units.map((item) => item[1])),
+  ];
 
   if (!active) {
     return (
@@ -1488,7 +1629,10 @@ export default function HydroMonitoring({
                 {units
                   .filter((item) => item[1] === plant)
                   .map((item) => (
-                    <option key={item[0]} value={item[0]}>
+                    <option
+                      key={item[0]}
+                      value={item[0]}
+                    >
                       {item[1]} · {unitName(item)}
                     </option>
                   ))}

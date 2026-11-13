@@ -116,21 +116,38 @@ export default function VoltageMetric({
     reading = voltageReading(state.row);
   }
 
-  return (
-    <article className="hml-metric" title={expectedTag || ''} aria-busy={loading}>
+    return (
+    <article
+      className="hml-metric voltage-compact"
+      title={expectedTag || ''}
+      aria-busy={loading}
+    >
       <span>Voltage</span>
-      <strong>{Number.isFinite(reading.value) ? FORMAT.format(reading.value) : '—'}</strong>
-      <small>{parameter?.engineering_unit || 'Satuan belum dikonfirmasi'}</small>
-      <small>Nilai terakhir dalam rentang pilihan</small>
-      <small>
-        {start && end
-          ? `${displayTime(start)} sampai sebelum ${displayTime(end)}`
-          : 'Belum ada rentang waktu'}
-      </small>
-      <small aria-live="polite">{reading.status}</small>
-      <small>
-        {reading.stamp ? `Waktu pengukuran: ${reading.stamp}` : '—'}
-      </small>
+
+      <strong className="voltage-compact-value">
+        {Number.isFinite(reading.value)
+          ? FORMAT.format(reading.value)
+          : '—'}
+
+        {parameter?.engineering_unit && (
+          <span className="voltage-compact-unit">
+            {parameter.engineering_unit}
+          </span>
+        )}
+      </strong>
+
+      {reading.stamp && (
+        <small>
+          {displayTime(reading.stamp)}
+        </small>
+      )}
+
+      {!Number.isFinite(reading.value) && (
+        <small role="status">
+          {reading.status}
+        </small>
+      )}
     </article>
   );
 }
+

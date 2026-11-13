@@ -1,0 +1,34 @@
+.speed-metric .speed-title {
+  display: block;
+  color: #16345b;
+  font-weight: 600;
+}
+
+.speed-metric .speed-reading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 12px 0 8px;
+  color: #16345b;
+}
+
+.speed-metric .speed-reading strong {
+  font-size: 28px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-metric .speed-reading > span {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.speed-metric .speed-time,
+.speed-metric .speed-note {
+  display: block;
+  margin-top: 5px;
+  color: #526984;
+  font-size: 12px;
+  line-height: 1.5;
+}

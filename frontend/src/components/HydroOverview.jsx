@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import './HydroOverview.css';
+import CurrentMetric from './CurrentMetric';
+import WicketGateMetric from './WicketGateMetric';
+import SpeedMetric from './SpeedMetric';
+import PowerMetric from './PowerMetric';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
 const PLANTS = [
@@ -166,6 +170,20 @@ function OverviewMetric({ label, value, detail, icon }) {
   return <article className="ho-kpi"><span className="ho-kpi-icon"><Icon name={icon} /></span><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></article>;
 }
 function ParameterMetric({ unitId, parameters, field }) {
+    if (
+    field[0] === 'activePower' ||
+    field[0] === 'reactivePower'
+  ) {
+    return (
+      <PowerMetric
+        unitId={unitId}
+        kind={field[0]}
+        parameters={parameters}
+        variant="overview"
+      />
+    );
+  }
+  
   const [key, label, expectedUnit] = field;
   const { parameter, ambiguous } = classifyOperation(parameters, unitId, key);
   const reading = latestReading(parameter);
@@ -213,7 +231,22 @@ function VibrationGauge({ parameter }) {
   const series = seriesStyle(parameter);
   const hasValue = Number.isFinite(reading.value);
   // Do not transfer the raw-number reference to a sensor with a declared unit.
-  const showBands = hasValue && reading.value >= 0 && !parameter.engineering_unit?.trim();
+  const unitKey = String(parameter.engineering_unit || '')
+  .trim()
+  .replace(/μ/g, 'µ')
+  .toLowerCase();
+
+const isMicrometer = ['µm', 'um'].includes(unitKey);
+
+const isPeakToPeak = /peak-to-peak/i.test(
+  parameter.measurement_definition || '',
+);
+
+const showBands =
+  hasValue &&
+  reading.value >= 0 &&
+  isMicrometer &&
+  isPeakToPeak;
   const scale = showBands ? GAUGE_PREVIEW : gaugeScale(parameter, reading.value);
   const band = showBands ? GAUGE_BANDS.findLast((item) => reading.value >= item.start) : null;
   const bandLabel = band ? `Zona ${band.label.toLowerCase()} · acuan visual` : '';
@@ -249,7 +282,7 @@ function VibrationGauges({ parameters }) {
   if (!parameters.length) return <p className="ho-empty-inline">Data getaran belum tersedia.</p>;
   return <>
     <div className="ho-gauge-reference">
-      <span>Acuan visual sementara untuk angka sumber</span>
+      <span>Acuan warna sementara · µm peak-to-peak</span>
       <ul>
         <li className="ho-gauge-green"><i /> Hijau &lt; {number(GAUGE_PREVIEW.yellow)}</li>
         <li className="ho-gauge-yellow"><i /> Kuning {number(GAUGE_PREVIEW.yellow)}–&lt;{number(GAUGE_PREVIEW.red)}</li>
@@ -287,7 +320,43 @@ function UnitCard({ unit, entry, range, onOpenUnit }) {
     <p className="ho-unit-time">Pengukuran terbaru <time>{stamp(latest)}</time></p>
     {range && latest && latest.slice(0, 10) !== range.day && <p className="ho-warning">Tanggal terakhir unit berbeda dari tanggal data terbaru ({range.day}).</p>}
     {entry.stage === 'error' ? <div className="ho-unit-error" role="alert"><Icon name="review" /><strong>Data unit belum dapat dibaca</strong><span>{entry.error}</span></div> : entry.stage === 'loading' ? <div className="ho-unit-error" role="status"><Icon name="wave" /><span>Membaca pengukuran {unit.plant} {unit.name}…</span></div> : <>
-      <div className="ho-parameters">{OPERATIONS.map((field) => <ParameterMetric key={field[0]} unitId={unit.id} parameters={parameters} field={field} />)}<div className="ho-parameter"><span>Temperatur bearing & oli</span><strong>{temperatures.length ? `${temperatures.length} titik` : '—'}</strong><small>Nilai tiap sensor di bawah</small></div></div>
+      <div className="ho-parameters">
+  {OPERATIONS.map((field) =>
+  field[0] === 'current' ? (
+    <CurrentMetric
+      key={field[0]}
+      unitId={unit.id}
+      parameters={parameters}
+    />
+  ) : field[0] === 'gate' ? (
+    <WicketGateMetric
+      key={field[0]}
+      unitId={unit.id}
+      parameters={parameters}
+      variant="overview"
+    />
+  ) : (
+    <ParameterMetric
+      key={field[0]}
+      unitId={unit.id}
+      parameters={parameters}
+      field={field}
+    />
+  ),
+)}
+
+  <div className="ho-parameter">
+    <span>Temperatur bearing & oli</span>
+
+    <strong>
+      {temperatures.length
+        ? `${temperatures.length} titik`
+        : '—'}
+    </strong>
+
+    <small>Nilai tiap sensor di bawah</small>
+  </div>
+</div>
       <section className="ho-section"><div className="ho-section-heading"><h4>Indikator getaran</h4><span>Nilai terakhir tiap sensor</span></div><VibrationGauges parameters={vibrations} /></section>
       <section className="ho-section"><div className="ho-section-heading"><h4>Temperatur bearing & oli</h4><span>Snapshot</span></div><LatestList parameters={temperatures} kind="temperature" /></section>
       <section className="ho-section ho-pd"><div className="ho-section-heading"><h4>Partial Discharge</h4><span>{pd.length ? 'Snapshot' : 'Belum tersedia'}</span></div>{pd.length > 0 && <LatestList parameters={pd} kind="pd" />}</section>
@@ -297,38 +366,200 @@ function UnitCard({ unit, entry, range, onOpenUnit }) {
 }
 
 function UnitSummary({ entries }) {
-  return <section className="ho-unit-summary" aria-labelledby="ho-summary-title">
-    <div className="ho-summary-heading"><h2 id="ho-summary-title">Ringkasan seluruh unit</h2><span>Snapshot terakhir tiap sensor · 7 unit</span></div>
-    <div className="ho-table-scroll">
-      <table>
-        <thead><tr><th scope="col">PLTA / unit</th><th scope="col">Voltage</th><th scope="col">Getaran terakhir</th><th scope="col">Temperatur bearing & oli</th><th scope="col">Kualitas data</th><th scope="col">Pengukuran terbaru</th></tr></thead>
-        <tbody>{UNITS.map((unit) => {
-          const entry = entries[unit.id];
-          const { parameter } = classifyOperation(entry.parameters, unit.id, 'voltage');
-          const voltage = latestReading(parameter);
-          const vibrations = entry.parameters.filter(isVibration);
-          const temperatures = entry.parameters.filter(isTemperature);
-          const review = entry.parameters.filter((p) => ['suspect', 'invalid', 'missing'].includes(p.latest_quality)).length;
-          const overviewValues = (items, kind) => items.length ? <div className="ho-table-values">{items.map((p) => {
-            const r = latestReading(p);
-            return <span key={p.channel_id} title={`${p.tag_name} · ${stamp(r.time)} · ${r.note}`}>
-              {kind === 'vibration' && <i style={{ background: seriesStyle(p).color }} />}
-              {kind === 'vibration' ? `${seriesStyle(p).label}: ` : ''}<strong>{number(r.value)}</strong>{p.engineering_unit ? ` ${p.engineering_unit}` : ''}
-            </span>;
-          })}</div> : '—';
-          return <tr key={unit.id} data-summary-unit={unit.id}>
-            <th scope="row"><strong>{unit.plant} · {unit.name}</strong><small>{unit.id}</small></th>
-            <td><strong>{number(voltage.value)}</strong>{parameter?.engineering_unit && ` ${parameter.engineering_unit}`}<small>{parameter && !parameter.engineering_unit ? 'Satuan belum dikonfirmasi' : voltage.note}</small></td>
-            <td>{overviewValues(vibrations, 'vibration')}</td>
-            <td>{overviewValues(temperatures, 'temperature')}</td>
-            <td><span className={review || entry.stage === 'error' ? 'ho-warning' : ''}>{entry.stage === 'loading' ? 'Memuat…' : entry.stage === 'error' ? 'Gagal dibaca' : review ? `${review} perlu ditinjau` : entry.parameters.length ? 'Belum diverifikasi' : 'Belum tersedia'}</span></td>
-            <td><time>{stamp(latestStamp(entry.parameters))}</time></td>
-          </tr>;
-        })}</tbody>
-      </table>
-    </div>
-    <p className="ho-note">Satuan mengikuti metadata sumber. Angka tanpa satuan belum dikonfirmasi. Kualitas data tidak menyatakan kondisi normal, alarm, atau trip.</p>
-  </section>;
+  return (
+    <section
+      className="ho-unit-summary"
+      aria-labelledby="ho-summary-title"
+    >
+      <div className="ho-summary-heading">
+        <h2 id="ho-summary-title">
+          Ringkasan seluruh unit
+        </h2>
+
+        <span>
+          Snapshot terakhir tiap sensor · 7 unit
+        </span>
+      </div>
+
+      <div className="ho-table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">PLTA / unit</th>
+              <th scope="col">Voltage</th>
+              <th scope="col">Arus</th>
+              <th scope="col">Getaran terakhir</th>
+              <th scope="col">
+                Temperatur bearing & oli
+              </th>
+              <th scope="col">Kualitas data</th>
+              <th scope="col">
+                Pengukuran terbaru
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {UNITS.map((unit) => {
+              const entry = entries[unit.id];
+
+              const { parameter } = classifyOperation(
+                entry.parameters,
+                unit.id,
+                'voltage',
+              );
+
+              const voltage = latestReading(parameter);
+
+              const vibrations =
+                entry.parameters.filter(isVibration);
+
+              const temperatures =
+                entry.parameters.filter(isTemperature);
+
+              const review = entry.parameters.filter(
+                (item) =>
+                  ['suspect', 'invalid', 'missing'].includes(
+                    item.latest_quality,
+                  ),
+              ).length;
+
+              const overviewValues = (items, kind) =>
+                items.length ? (
+                  <div className="ho-table-values">
+                    {items.map((item) => {
+                      const reading = latestReading(item);
+
+                      return (
+                        <span
+                          key={item.channel_id}
+                          title={`${item.tag_name} · ${
+                            stamp(reading.time)
+                          } · ${reading.note}`}
+                        >
+                          {kind === 'vibration' && (
+                            <i
+                              style={{
+                                background:
+                                  seriesStyle(item).color,
+                              }}
+                            />
+                          )}
+
+                          {kind === 'vibration'
+                            ? `${seriesStyle(item).label}: `
+                            : ''}
+
+                          <strong>
+                            {number(reading.value)}
+                          </strong>
+
+                          {item.engineering_unit
+                            ? ` ${item.engineering_unit}`
+                            : ''}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  '—'
+                );
+
+              const qualityText =
+                entry.stage === 'loading'
+                  ? 'Memuat…'
+                  : entry.stage === 'error'
+                    ? 'Gagal dibaca'
+                    : review
+                      ? `${review} perlu ditinjau`
+                      : entry.parameters.length
+                        ? 'Belum diverifikasi'
+                        : 'Belum tersedia';
+
+              return (
+                <tr
+                  key={unit.id}
+                  data-summary-unit={unit.id}
+                >
+                  <th scope="row">
+                    <strong>
+                      {unit.plant} · {unit.name}
+                    </strong>
+
+                    <small>{unit.id}</small>
+                  </th>
+
+                  <td>
+                    <strong>
+                      {number(voltage.value)}
+                    </strong>
+
+                    {parameter?.engineering_unit &&
+                      ` ${parameter.engineering_unit}`}
+
+                    <small>
+                      {parameter &&
+                      !parameter.engineering_unit
+                        ? 'Satuan belum dikonfirmasi'
+                        : voltage.note}
+                    </small>
+                  </td>
+
+                  <td>
+                    <CurrentMetric
+                      unitId={unit.id}
+                      parameters={entry.parameters}
+                      variant="summary"
+                    />
+                  </td>
+
+                  <td>
+                    {overviewValues(
+                      vibrations,
+                      'vibration',
+                    )}
+                  </td>
+
+                  <td>
+                    {overviewValues(
+                      temperatures,
+                      'temperature',
+                    )}
+                  </td>
+
+                  <td>
+                    <span
+                      className={
+                        review || entry.stage === 'error'
+                          ? 'ho-warning'
+                          : ''
+                      }
+                    >
+                      {qualityText}
+                    </span>
+                  </td>
+
+                  <td>
+                    <time>
+                      {stamp(
+                        latestStamp(entry.parameters),
+                      )}
+                    </time>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="ho-note">
+        Satuan mengikuti metadata sumber. Angka tanpa
+        satuan belum dikonfirmasi. Kualitas data tidak
+        menyatakan kondisi normal, alarm, atau trip.
+      </p>
+    </section>
+  );
 }
 
 export default function HydroOverview({ onOpenUnit } = {}) {
