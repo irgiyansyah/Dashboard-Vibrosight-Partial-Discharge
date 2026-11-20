@@ -1,0 +1,105 @@
+.temperature-panel {
+  min-width: 0;
+  color: #16345b;
+}
+
+.temperature-panel .temperature-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-bottom: 14px;
+}
+
+.temperature-panel .temperature-heading h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #16345b;
+}
+
+.temperature-panel .temperature-heading > span,
+.temperature-panel .temperature-footnote,
+.temperature-panel .temperature-empty {
+  color: #526984;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.temperature-panel .temperature-groups {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.temperature-panel .temperature-group {
+  min-width: 0;
+  border: 1px solid #d2dfef;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.temperature-panel .temperature-group h4 {
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: #16345b;
+  background: #eef5fc;
+  border-bottom: 1px solid #d2dfef;
+}
+
+.temperature-panel .temperature-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 3px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.temperature-panel .temperature-row + .temperature-row {
+  border-top: 1px solid #e2eaf4;
+}
+
+.temperature-panel .temperature-label {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.temperature-panel .temperature-value {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.temperature-panel .temperature-value strong {
+  font-size: 21px;
+  line-height: 1.3;
+  color: #16345b;
+  font-variant-numeric: tabular-nums;
+}
+
+.temperature-panel .temperature-value > span {
+  font-size: 12px;
+  color: #526984;
+}
+
+.temperature-panel .temperature-time,
+.temperature-panel .temperature-note {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #526984;
+}
+
+.temperature-panel .temperature-note {
+  color: #805600;
+}
+
+.temperature-panel .temperature-footnote {
+  margin: 12px 0 0;
+}

@@ -12,6 +12,7 @@ from voltage_routes import router as voltage_router
 from current_routes import router as current_router
 from speed_routes import router as speed_router
 from power_routes import router as power_router
+from temperature_routes import router as temperature_router
 
 app = FastAPI(title="Hydro Insight API")
 app.include_router(tgb_router)
@@ -20,6 +21,7 @@ app.include_router(current_router)
 app.include_router(wicket_gate_router)
 app.include_router(speed_router)
 app.include_router(power_router)
+app.include_router(temperature_router)
 logger = logging.getLogger("uvicorn.error")
 
 

@@ -1,14 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import VibrationTrendChart from './VibrationTrendChart';
 
 import './HydroMonitoring.css';
 
@@ -17,6 +8,7 @@ import CurrentMetric from './CurrentMetric';
 import WicketGateMetric from './WicketGateMetric';
 import SpeedMetric from './SpeedMetric';
 import PowerMetric from './PowerMetric';
+import TemperaturePanel from './TemperaturePanel';
 
 const API_BASE = (
   import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
@@ -30,15 +22,6 @@ const UNITS = [
   ['KRB-02', 'Karebbe', 2],
   ['BLB-01', 'Balambano', 1],
   ['BLB-02', 'Balambano', 2],
-];
-
-const PENDING_PARAMETERS = [
-  ['Daya aktif', 'MW'],
-  ['Daya reaktif', 'MVAr'],
-  ['Voltage', 'Tegangan'],
-  ['Current / Arus', 'Arus generator'],
-  ['Gap', 'Definisi gap perlu dikonfirmasi'],
-  ['Wicket Gate Position', 'Posisi bukaan'],
 ];
 
 const RANGE_OPTIONS = [
@@ -208,6 +191,7 @@ function useApi(path, revision = 0) {
     if (!path) return;
 
     const controller = new AbortController();
+
     let active = true;
     let timedOut = false;
 
@@ -354,12 +338,8 @@ function Reading({
 
 function resolveReading(
   parameter,
-  { mode, ready, hasRange, result, error },
+  { ready, hasRange, result, error },
 ) {
-  if (mode !== 'analysis') {
-    return { parameter, message: '' };
-  }
-
   const empty = {
     ...parameter,
     latest_time: null,
@@ -397,7 +377,9 @@ function resolveReading(
     };
   }
 
-  const last = result.rows.at(-1);
+  const last = Array.isArray(result.rows)
+    ? result.rows.at(-1)
+    : null;
 
   if (!last) {
     return {
@@ -427,40 +409,29 @@ function HistoryReadings({
   parameters = [],
   selectedId,
   onSelect,
-  mode,
   ready,
   start,
   end,
   results = {},
   errors = {},
 }) {
-  const isAnalysis = mode === 'analysis';
-
   return (
     <section className="hml-panel">
-      <h2>
-        {isAnalysis
-          ? 'Nilai terakhir dalam rentang pilihan'
-          : 'Getaran terakhir'}
-      </h2>
+      <h2>Nilai terakhir dalam rentang pilihan</h2>
 
-      {!isAnalysis && (
-        <p className="hml-note">
-          Nilai terbaru yang tersimpan di database.
-          Filter tanggal berlaku pada grafik riwayat.
-        </p>
-      )}
-
-      {isAnalysis && start && end && (
+      {start && end ? (
         <p className="hml-note">
           {time(start)} sampai sebelum {time(end)}.
+        </p>
+      ) : (
+        <p className="hml-note">
+          Pilih tanggal pengukuran.
         </p>
       )}
 
       <div className="hml-readings">
         {parameters.map((item) => {
           const reading = resolveReading(item, {
-            mode,
             ready,
             hasRange: Boolean(start && end),
             result: results[item.channel_id],
@@ -635,7 +606,6 @@ function History({
   parameter,
   parameters = [],
   revision,
-  mode = 'monitoring',
   onSelect,
   range,
   setChosenDay,
@@ -695,6 +665,7 @@ function History({
     if (!idsKey || !start || !end) return;
 
     const controller = new AbortController();
+
     let active = true;
     let timedOut = false;
 
@@ -707,6 +678,7 @@ function History({
       const ids = idsKey.split(',').map(Number);
       const results = {};
       const errors = {};
+
       let nextIndex = 0;
 
       async function worker() {
@@ -759,7 +731,9 @@ function History({
   }, [idsKey, start, end, key]);
 
   const current = state.key === key;
-  const loading = Boolean(start && end && idsKey) && !current;
+
+  const loading =
+    Boolean(start && end && idsKey) && !current;
 
   const chartRows = useMemo(() => {
     if (!current) return [];
@@ -817,9 +791,15 @@ function History({
     ? state.results[parameter.channel_id]?.summary
     : null;
 
-  const engineeringUnit =
-    parameter.engineering_unit ||
-    'satuan belum dikonfirmasi';
+  const engineeringUnit = parameter.engineering_unit
+    ? `${parameter.engineering_unit}${
+        /peak-to-peak/i.test(
+          parameter.measurement_definition || '',
+        )
+          ? ' p-p'
+          : ''
+      }`
+    : 'satuan belum dikonfirmasi';
 
   const metadataUnconfirmed =
     !parameter.engineering_unit ||
@@ -939,7 +919,6 @@ function History({
         parameters={readingParameters}
         selectedId={parameter.channel_id}
         onSelect={onSelect}
-        mode={mode}
         ready={current}
         start={start}
         end={end}
@@ -1126,81 +1105,25 @@ function History({
             </p>
 
             {hasPlot ? (
-              <div
-                className="hml-chart"
-                role="img"
-                aria-label={`Grafik getaran ${rangeLabel} dengan ${
-                  visibleSeries.length
-                } kurva dipilih`}
-              >
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <LineChart
-                    data={chartRows}
-                    margin={{
-                      top: 16,
-                      right: 24,
-                      bottom: 8,
-                      left: 0,
-                    }}
-                  >
-                    <CartesianGrid
-                      stroke="#d6e0eb"
-                      strokeDasharray="3 3"
-                    />
-
-                    <XAxis
-                      dataKey="axisTime"
-                      type="number"
-                      domain={[startMs, endMs]}
-                      ticks={ticks}
-                      tickFormatter={axisLabel}
-                      minTickGap={20}
-                    />
-
-                    <YAxis
-                      domain={['auto', 'auto']}
-                      width={65}
-                      tickFormatter={number}
-                    />
-
-                    <Tooltip
-                      labelFormatter={tooltipLabel}
-                      formatter={(value, name) => [
-                        number(value),
-                        name,
-                      ]}
-                    />
-
-                    {visibleSeries.map((item) => (
-                      <Line
-                        key={item.channel_id}
-                        type="linear"
-                        dataKey={item.dataKey}
-                        name={`${item.style.name} · ${item.tag_name}`}
-                        stroke={item.style.color}
-                        strokeDasharray={item.style.dash}
-                        strokeWidth={1.6}
-                        dot={false}
-                        activeDot={{ r: 4 }}
-                        connectNulls={false}
-                        isAnimationActive={false}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <p className="hml-message">
-                {visibleSeries.length === 0
-                  ? 'Semua kurva disembunyikan. Klik legenda untuk menampilkan.'
-                  : failedSeries.length === series.length
-                    ? 'Riwayat belum dapat dimuat.'
-                    : 'Tidak ada nilai yang dapat diplot untuk kurva dan rentang ini.'}
-              </p>
-            )}
+  <VibrationTrendChart
+    chartRows={chartRows}
+    visibleSeries={visibleSeries}
+    startMs={startMs}
+    endMs={endMs}
+    ticks={ticks}
+    axisLabel={axisLabel}
+    tooltipLabel={tooltipLabel}
+    engineeringUnit={engineeringUnit}
+  />
+) : (
+  <p className="hml-message">
+    {visibleSeries.length === 0
+      ? 'Semua kurva disembunyikan. Klik legenda untuk menampilkan.'
+      : failedSeries.length === series.length
+        ? 'Riwayat belum dapat dimuat.'
+        : 'Tidak ada nilai yang dapat diplot untuk kurva dan rentang ini.'}
+  </p>
+)}
           </>
         )}
 
@@ -1323,10 +1246,14 @@ function History({
         )}
 
         <p className="hml-note">
-          Nilai suspect, missing, dan invalid tidak
-          diplot. Data unverified masih memerlukan
-          verifikasi. Batas normal, alarm, dan trip
-          belum diterapkan.
+          <p className="hml-note">
+          Nilai suspect, missing, dan invalid tidak diplot.
+          Data unverified masih memerlukan verifikasi.
+          Batas alert 300 dan ambang trip 400 diterapkan
+          hanya pada kurva dengan metadata µm peak-to-peak.
+          Hasil menunjukkan pelampauan data historis,
+          bukan status live.
+        </p>
         </p>
       </section>
     </div>
@@ -1349,10 +1276,6 @@ function UnitData({ unitId, mode = 'monitoring' }) {
 
   const vibrations = parameters.filter(
     (item) => category(item) === 'vibration',
-  );
-
-  const temperatures = parameters.filter(
-    (item) => category(item) === 'temperature',
   );
 
   const selected =
@@ -1441,65 +1364,65 @@ function UnitData({ unitId, mode = 'monitoring' }) {
           )}
 
           {!isAnalysis && (
-  <section
-    className="hml-operations"
-    aria-label="Parameter operasi"
-  >
-    <PowerMetric
-      unitId={unitId}
-      kind="activePower"
-      parameters={parameters}
-      start={range.start}
-      end={range.end}
-      revision={revision}
-      loadHistory={fetchHistory}
-    />
+            <section
+              className="hml-operations"
+              aria-label="Parameter operasi"
+            >
+              <PowerMetric
+                unitId={unitId}
+                kind="activePower"
+                parameters={parameters}
+                start={range.start}
+                end={range.end}
+                revision={revision}
+                loadHistory={fetchHistory}
+              />
 
-    <PowerMetric
-      unitId={unitId}
-      kind="reactivePower"
-      parameters={parameters}
-      start={range.start}
-      end={range.end}
-      revision={revision}
-      loadHistory={fetchHistory}
-    />
+              <PowerMetric
+                unitId={unitId}
+                kind="reactivePower"
+                parameters={parameters}
+                start={range.start}
+                end={range.end}
+                revision={revision}
+                loadHistory={fetchHistory}
+              />
 
-    <VoltageMetric
-      unitId={unitId}
-      parameters={parameters}
-      start={range.start}
-      end={range.end}
-      revision={revision}
-      loadHistory={fetchHistory}
-    />
+              <VoltageMetric
+                unitId={unitId}
+                parameters={parameters}
+                start={range.start}
+                end={range.end}
+                revision={revision}
+                loadHistory={fetchHistory}
+              />
 
-    <CurrentMetric
-      unitId={unitId}
-      parameters={parameters}
-      start={range.start}
-      end={range.end}
-      revision={revision}
-      loadHistory={fetchHistory}
-      variant="monitoring"
-    />
+              <CurrentMetric
+                unitId={unitId}
+                parameters={parameters}
+                start={range.start}
+                end={range.end}
+                revision={revision}
+                loadHistory={fetchHistory}
+                variant="monitoring"
+              />
 
-    <Metric
-      title="Gap"
-      value="—"
-      detail="Definisi gap perlu dikonfirmasi · belum tersedia"
-    />
+              <Metric
+                title="Gap"
+                value="—"
+                detail="Definisi gap perlu dikonfirmasi · belum tersedia"
+              />
 
-    <WicketGateMetric
-      unitId={unitId}
-      parameters={parameters}
-      start={range.start}
-      end={range.end}
-      revision={revision}
-      loadHistory={fetchHistory}
-    />
-  </section>
-)}
+              <WicketGateMetric
+                unitId={unitId}
+                parameters={parameters}
+                start={range.start}
+                end={range.end}
+                revision={revision}
+                loadHistory={fetchHistory}
+              />
+            </section>
+          )}
 
           {selected ? (
             <History
@@ -1507,7 +1430,6 @@ function UnitData({ unitId, mode = 'monitoring' }) {
               parameter={selected}
               parameters={vibrations}
               revision={revision}
-              mode={mode}
               onSelect={setSelectedId}
               range={range}
               setChosenDay={setChosenDay}
@@ -1527,24 +1449,14 @@ function UnitData({ unitId, mode = 'monitoring' }) {
 
           {!isAnalysis && (
             <div className="hml-bottom">
-              <section className="hml-panel">
-                <h2>Temperature Bearing & oil</h2>
-
-                <div className="hml-temperature-grid">
-                  {temperatures.map((item) => (
-                    <Reading
-                      key={item.channel_id}
-                      parameter={item}
-                    />
-                  ))}
-                </div>
-
-                {!temperatures.length && (
-                  <p className="hml-message">
-                    Data temperatur belum tersedia.
-                  </p>
-                )}
-              </section>
+              <TemperaturePanel
+                unitId={unitId}
+                parameters={parameters}
+                start={range.start}
+                end={range.end}
+                revision={revision}
+                loadHistory={fetchHistory}
+              />
 
               <SpeedMetric
                 unitId={unitId}
