@@ -1158,7 +1158,7 @@ export default function LiveMonitoring({
   }
 
   const pageTitle = isOverview
-    ? 'Overview Armada · Real-time (Live)'
+    ? 'Overview'
     : isVibrationAnalysis
       ? 'Vibration Analysis · Real-time (Live)'
       : isAlarms
@@ -1166,7 +1166,7 @@ export default function LiveMonitoring({
         : 'Unit Monitoring · Real-time (Live)'
 
   const pageSubtitle = isOverview
-    ? 'Pemantauan menyeluruh 3 PLTA (Larona, Balambano, Karebbe) · 7 unit dengan skema kaskade, hidrologi, & gauge jarum langsung.'
+    ? 'PT Vale Indonesia Hydroelectric Power Plant'
     : isVibrationAnalysis
       ? 'Animasi grafik tren getaran bergerak otomatis mengikuti jumlah kanal tiap PLTA.'
       : isAlarms
