@@ -10,8 +10,44 @@ import {
   YAxis,
 } from 'recharts';
 
-const ALERT = 300;
-const TRIP = 400;
+import {
+  classifyVibration,
+  supportsVibrationThreshold,
+  VIBRATION_LIMITS,
+  VIBRATION_STATUS,
+} from './vibrationThresholds.js';
+
+const LINE_STYLES = [
+  {
+    level: 'fail',
+    threshold: VIBRATION_LIMITS.normal,
+    stroke: '#8055b8',
+    badgeWidth: 132,
+    background: '#2b1d3c',
+    color: '#dfc7ff',
+    left: true,
+    compactGap: 5,
+  },
+  {
+    level: 'awareness',
+    threshold: VIBRATION_LIMITS.awareness,
+    stroke: '#b77900',
+    badgeWidth: 192,
+    background: '#322719',
+    color: '#ffd179',
+    below: true,
+    compactGap: 27,
+  },
+  {
+    level: 'trip',
+    threshold: VIBRATION_LIMITS.trip,
+    stroke: '#e84c68',
+    badgeWidth: 128,
+    background: '#2c1d2b',
+    color: '#ff90a4',
+    compactGap: 49,
+  },
+];
 
 const formatNumber = new Intl.NumberFormat('id-ID', {
   maximumFractionDigits: 2,
@@ -22,101 +58,103 @@ const number = (value) =>
     ? formatNumber.format(value)
     : '—';
 
-function supportsThreshold(parameter) {
-  const unit = String(parameter.engineering_unit || '')
-    .trim()
-    .replace(/μ/g, 'µ')
-    .toLowerCase();
+function ThresholdLabel({
+  viewBox,
+  caption,
+  badgeWidth,
+  background,
+  color,
+  below = false,
+  left = false,
+  gap = 5,
+}) {
+  const inset = 10;
+  const height = 21;
 
-  const definition = String(
-    parameter.measurement_definition || '',
-  )
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-');
+  if (!viewBox || viewBox.width < badgeWidth + inset * 2) {
+    return null;
+  }
+
+  const x = left
+    ? viewBox.x + inset
+    : viewBox.x + viewBox.width - inset - badgeWidth;
+  const y = below
+    ? viewBox.y + gap
+    : viewBox.y - height - gap;
 
   return (
-    ['µm', 'um'].includes(unit) &&
-    definition === 'peak-to-peak'
+    <g pointerEvents="none">
+      <rect
+        x={x}
+        y={y}
+        width={badgeWidth}
+        height={height}
+        rx={4}
+        fill={background}
+      />
+      <text
+        x={x + badgeWidth / 2}
+        y={y + height / 2}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill={color}
+        fontSize={11}
+        fontWeight={600}
+      >
+        {caption}
+      </text>
+    </g>
   );
 }
 
-function level(value) {
-  if (!Number.isFinite(value) || value < 0) {
-    return 'excluded';
-  }
-
-  if (value >= TRIP) return 'trip';
-  if (value >= ALERT) return 'alert';
-
-  return 'below';
-}
-
-// Semua pembacaan dihitung.
-// Penanda dibatasi agar grafik panjang tetap ringan.
+// Hitung semua pembacaan, dengan maksimal 120 penanda per kurva.
 function analyse(rows, series) {
-  let alert = 0;
-  let trip = 0;
+  const counts = { fail: 0, normal: 0, awareness: 0, trip: 0 };
   let evaluated = 0;
+  let maxValue = 0;
   let limited = false;
-
   const markers = {};
 
   for (const item of series) {
     const points = [];
     let peak = null;
+    let lowestFail = null;
 
     for (const row of rows) {
       const value = row[item.dataKey];
-      const state = level(value);
-
-      if (state === 'excluded') continue;
+      const status = classifyVibration(value);
+      if (status === null) continue;
 
       evaluated += 1;
+      maxValue = Math.max(maxValue, value);
+      counts[status] += 1;
+      if (status === 'normal') continue;
 
-      if (state === 'alert') alert += 1;
-      if (state === 'trip') trip += 1;
-
-      if (state === 'alert' || state === 'trip') {
-        points.push(row.axisTime);
-
-        if (!peak || value > peak.value) {
-          peak = {
-            time: row.axisTime,
-            value,
-          };
-        }
+      points.push(row.axisTime);
+      if (!peak || value > peak.value) {
+        peak = { time: row.axisTime, value };
+      }
+      if (status === 'fail' && (!lowestFail || value < lowestFail.value)) {
+        lowestFail = { time: row.axisTime, value };
       }
     }
 
     const selected = new Set();
-
     if (points.length <= 120) {
       points.forEach((time) => selected.add(time));
     } else {
       limited = true;
-
-      for (let i = 0; i < 119; i += 1) {
-        const index = Math.round(
-          (i * (points.length - 1)) / 118,
-        );
-
+      for (let i = 0; i < 118; i += 1) {
+        const index = Math.round((i * (points.length - 1)) / 117);
         selected.add(points[index]);
       }
-
       if (peak) selected.add(peak.time);
+      if (lowestFail) selected.add(lowestFail.time);
     }
-
     markers[item.dataKey] = selected;
   }
 
-  return {
-    alert,
-    trip,
-    evaluated,
-    limited,
-    markers,
-  };
+  return { counts, evaluated, limited, markers, maxValue };
 }
 
 export default function VibrationTrendChart({
@@ -131,7 +169,7 @@ export default function VibrationTrendChart({
 }) {
   const enabled =
     visibleSeries.length > 0 &&
-    visibleSeries.every(supportsThreshold);
+    visibleSeries.every(supportsVibrationThreshold);
 
   const stats = useMemo(
     () =>
@@ -142,15 +180,13 @@ export default function VibrationTrendChart({
     [chartRows, visibleSeries, enabled],
   );
 
+  const compactThresholds = stats.maxValue > 1000;
+
   const statusText = (value) => {
     if (!enabled) return '';
 
-    return {
-      below: 'Di bawah alert',
-      alert: 'Alert',
-      trip: 'Ambang trip terlampaui',
-      excluded: 'Tidak dievaluasi',
-    }[level(value)];
+    const status = classifyVibration(value);
+    return VIBRATION_STATUS[status]?.label ?? 'Tidak dievaluasi';
   };
 
   return (
@@ -166,15 +202,11 @@ export default function VibrationTrendChart({
         }}
       >
         {enabled ? (
-          <>
-            <strong style={{ color: '#996500' }}>
-              Alert ≥ 300 µm p-p
+          Object.entries(VIBRATION_STATUS).map(([level, status]) => (
+            <strong key={level} style={{ color: status.color }}>
+              {status.label} · {status.range} µm p-p
             </strong>
-
-            <strong style={{ color: '#c5283d' }}>
-              Ambang trip ≥ 400 µm p-p
-            </strong>
-          </>
+          ))
         ) : (
           <span>
             Batas belum diterapkan: metadata kurva
@@ -289,11 +321,7 @@ export default function VibrationTrendChart({
                             cx={props.cx}
                             cy={props.cy}
                             r={3}
-                            fill={
-                              level(value) === 'trip'
-                                ? '#d62f45'
-                                : '#b77900'
-                            }
+                            fill={VIBRATION_STATUS[classifyVibration(value)].color}
                             stroke="#fff"
                             strokeWidth={1}
                           />
@@ -304,37 +332,30 @@ export default function VibrationTrendChart({
               />
             ))}
 
-            {enabled && (
+            {enabled && LINE_STYLES.map((style) => (
               <ReferenceLine
-                y={ALERT}
-                stroke="#b77900"
+                key={style.level}
+                y={style.threshold}
+                stroke={style.stroke}
                 strokeWidth={2}
-                strokeDasharray="7 5"
+                strokeDasharray="8 5"
                 ifOverflow="extendDomain"
+                className={`vibration-threshold-${style.level}`}
                 label={{
-                  value: 'Alert · 300 µm p-p',
-                  position: 'insideTopRight',
-                  fill: '#996500',
-                  fontSize: 12,
+                  content: (
+                    <ThresholdLabel
+                      caption={`${VIBRATION_STATUS[style.level].label} · ${style.level === 'fail' ? '< ' : ''}${style.threshold} µm p-p`}
+                      badgeWidth={style.badgeWidth}
+                      background={style.background}
+                      color={style.color}
+                      below={style.below && !compactThresholds}
+                      gap={compactThresholds ? style.compactGap : undefined}
+                      left={style.left}
+                    />
+                  ),
                 }}
               />
-            )}
-
-            {enabled && (
-              <ReferenceLine
-                y={TRIP}
-                stroke="#d62f45"
-                strokeWidth={2}
-                strokeDasharray="7 5"
-                ifOverflow="extendDomain"
-                label={{
-                  value: 'Ambang trip · 400 µm p-p',
-                  position: 'insideTopRight',
-                  fill: '#c5283d',
-                  fontSize: 12,
-                }}
-              />
-            )}
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -349,7 +370,7 @@ export default function VibrationTrendChart({
             background: '#f3f7fb',
             border: '1px solid #d4e1ee',
             color: '#183958',
-            fontSize: 13,
+            fontSize: 12,
             lineHeight: 1.6,
           }}
         >
@@ -369,13 +390,11 @@ export default function VibrationTrendChart({
               dievaluasi
             </span>
 
-            <span style={{ color: '#996500' }}>
-              Alert: {number(stats.alert)}
-            </span>
-
-            <span style={{ color: '#c5283d' }}>
-              Ambang trip: {number(stats.trip)}
-            </span>
+            {Object.entries(VIBRATION_STATUS).map(([level, status]) => (
+              <span key={level} style={{ color: status.color }}>
+                {status.label}: {number(stats.counts[level])}
+              </span>
+            ))}
           </div>
 
           <small>

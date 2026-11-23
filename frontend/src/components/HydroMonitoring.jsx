@@ -1246,14 +1246,10 @@ function History({
         )}
 
         <p className="hml-note">
-          <p className="hml-note">
           Nilai suspect, missing, dan invalid tidak diplot.
           Data unverified masih memerlukan verifikasi.
-          Batas alert 300 dan ambang trip 400 diterapkan
-          hanya pada kurva dengan metadata µm peak-to-peak.
-          Hasil menunjukkan pelampauan data historis,
-          bukan status live.
-        </p>
+          Grafik menampilkan status historis berdasarkan
+          ambang mentor untuk kurva dengan metadata µm peak-to-peak.
         </p>
       </section>
     </div>

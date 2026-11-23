@@ -8,13 +8,16 @@ from database import get_connection
 from import_routes import router as import_router
 from monitoring_routes import router as monitoring_router
 from tgb_routes import router as tgb_router
-from voltage_routes import router as voltage_router 
+from voltage_routes import router as voltage_router
 from current_routes import router as current_router
 from speed_routes import router as speed_router
 from power_routes import router as power_router
 from temperature_routes import router as temperature_router
+from export_routes import router as export_router
+from live_routes import router as live_router
+from live_alerts import live_alert_lifespan, router as live_alert_router
 
-app = FastAPI(title="Hydro Insight API")
+app = FastAPI(title="Hydro Insight API", lifespan=live_alert_lifespan)
 app.include_router(tgb_router)
 app.include_router(voltage_router)
 app.include_router(current_router)
@@ -22,6 +25,9 @@ app.include_router(wicket_gate_router)
 app.include_router(speed_router)
 app.include_router(power_router)
 app.include_router(temperature_router)
+app.include_router(export_router)
+app.include_router(live_router)
+app.include_router(live_alert_router)
 logger = logging.getLogger("uvicorn.error")
 
 

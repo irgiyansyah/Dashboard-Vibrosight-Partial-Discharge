@@ -8,6 +8,8 @@ import type { MeasurementFile } from './components/HistoricalData'
 import HydroMonitoring from './components/HydroMonitoring.jsx'
 import HydroOverview from './components/HydroOverview'
 import AlarmsEvents from './components/AlarmsEvents'
+import DataTransfer from './components/DataTransfer'
+import LiveMonitoring from './components/LiveMonitoring'
 
 
 import valeLogo from './assets/vale-logo.png'
@@ -29,6 +31,12 @@ const menus = [
 
 type Page = (typeof menus)[number]
 type PlantFilter = Plant | 'all'
+
+const historyOnlyPages = new Set<Page>([
+  'Historical Data',
+  'Reports',
+  'Data Sources',
+])
 
 const plantOrder: Plant[] = [
   'Larona',
@@ -150,6 +158,7 @@ function MenuIcon({ page }: { page: Page }) {
 }
 
 function App() {
+  const [mode, setMode] = useState<'history' | 'live'>('history')
   const [page, setPage] = useState<Page>('Overview')
   const [plant, setPlant] =
     useState<PlantFilter>('all')
@@ -306,12 +315,27 @@ function App() {
     })
   }
 
+  function handleMenuClick(menu: Page) {
+    if (historyOnlyPages.has(menu)) {
+      setMode('history')
+    }
+    setPage(menu)
+  }
+
+  function switchToLive() {
+    if (historyOnlyPages.has(page)) {
+      setPage('Overview')
+    }
+    setMode('live')
+  }
+
   function resetFilters() {
     setPlant('all')
     setUnitId('all')
   }
 
   function openHistorical() {
+    setMode('history')
     setPage('Historical Data')
   }
 
@@ -425,15 +449,9 @@ function App() {
             <button
               key={menu}
               type="button"
-              className={`nav-item ${
-                page === menu ? 'active' : ''
-              }`}
-              aria-current={
-                page === menu
-                  ? 'page'
-                  : undefined
-              }
-              onClick={() => setPage(menu)}
+              className={`nav-item ${page === menu ? 'active' : ''}`}
+              aria-current={page === menu ? 'page' : undefined}
+              onClick={() => handleMenuClick(menu)}
             >
               <MenuIcon page={menu} />
 
@@ -462,9 +480,30 @@ function App() {
       </aside>
 
       <div className="main-layout">
+        <div className="hydro-mode-bar">
+          <span id="hydro-mode-label">Mode pemantauan</span>
+          <div className="hydro-mode-switch" role="group" aria-labelledby="hydro-mode-label">
+            <button type="button" aria-pressed={mode === 'live'} onClick={switchToLive}>
+              Real-time (Live)
+            </button>
+            <button type="button" aria-pressed={mode === 'history'} onClick={() => setMode('history')}>
+              Riwayat
+            </button>
+          </div>
+        </div>
+
+        {mode === 'live' && (
+          <LiveMonitoring
+            units={hydroUnits}
+            initialUnitId={monitoringUnit?.id}
+            activePage={page}
+            onSelectPage={(nextPage) => setPage(nextPage as Page)}
+          />
+        )}
+
         {/* Overview sudah memiliki header sendiri. */}
         {!isOverviewPage && (
-          <header className="topbar">
+          <header className="topbar" hidden={mode !== 'history'}>
             <div className="breadcrumb">
               Workspace <span>/</span>{' '}
               <strong>{page}</strong>
@@ -472,7 +511,7 @@ function App() {
 
             <div className="profile">
               <span className="badge neutral">
-                Historis · bukan live
+                Mode riwayat
               </span>
 
               <div className="avatar">
@@ -495,6 +534,7 @@ function App() {
           !isAlarmsPage && (
             <section
               className="filterbar"
+              hidden={mode !== 'history'}
               aria-label="Filter monitoring"
             >
               <label>
@@ -557,12 +597,13 @@ function App() {
 
               <div className="connection-status">
                 <span className="status-dot" />
-                Data historis · live belum terhubung
+                Data historis
               </div>
             </section>
           )}
 
         <main
+          hidden={mode !== 'history'}
           className={
             isOverviewPage
               ? 'overview-page'
@@ -643,101 +684,104 @@ function App() {
               onChange={setDatasets}
             />
           ) : page === 'Data Sources' ? (
-            <section className="panel">
-              <div className="panel-heading">
-                <h2>
-                  File dalam sesi browser
-                </h2>
+            <>
+              <DataTransfer units={hydroUnits} />
 
-                <p>
-                  Overview dan Unit Monitoring membaca
-                  data dari database. Daftar di bawah
-                  hanya menunjukkan file yang dibuka
-                  melalui Historical Data dalam sesi
-                  browser ini.
-                </p>
-              </div>
+              <section className="panel">
+                <div className="panel-heading">
+                  <h2>
+                    File dalam sesi browser
+                  </h2>
 
-              {datasets.length > 0 ? (
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>PLTA</th>
-                        <th>Unit</th>
-                        <th>File sumber</th>
-                        <th>Kanal</th>
-                        <th>Timestamp</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {datasets.map((dataset) => {
-                        const unit = hydroUnits.find(
-                          (item) =>
-                            item.id === dataset.unitId,
-                        )
-
-                        return (
-                          <tr key={dataset.unitId}>
-                            <td>
-                              {unit?.plant ??
-                                'Belum dipetakan'}
-                            </td>
-
-                            <td>
-                              {unit?.name ??
-                                dataset.unitId}
-                            </td>
-
-                            <td>
-                              {dataset.source}
-                            </td>
-
-                            <td>
-                              {dataset.tags.length}
-                            </td>
-
-                            <td>
-                              {dataset.rows.length}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="empty-content">
                   <p>
-                    Belum ada file yang dibuka dalam
-                    sesi browser ini. Data di database
-                    tetap dapat dilihat melalui
-                    Overview dan Unit Monitoring.
+                    Overview dan Unit Monitoring membaca
+                    data dari database. Daftar di bawah
+                    hanya menunjukkan file yang dibuka
+                    melalui Historical Data dalam sesi
+                    browser ini.
                   </p>
                 </div>
-              )}
 
-              <div className="empty-content">
-                <button
-                  type="button"
-                  className="outline-button"
-                  onClick={openHistorical}
-                >
-                  Impor atau kelola data historis
-                </button>
-              </div>
+                {datasets.length > 0 ? (
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>PLTA</th>
+                          <th>Unit</th>
+                          <th>File sumber</th>
+                          <th>Kanal</th>
+                          <th>Timestamp</th>
+                        </tr>
+                      </thead>
 
-              <div className="panel-footnote">
-                Halaman ini mencatat file yang dibuka
-                selama sesi browser. Periksa
-                kelengkapan metadata setiap kanal
-                pada data sumber. Analisis pelampauan
-                batas getaran tersedia di Alarms &
-                Events. Data PD serta koneksi live
-                belum tersedia.
-              </div>
-            </section>
+                      <tbody>
+                        {datasets.map((dataset) => {
+                          const unit = hydroUnits.find(
+                            (item) =>
+                              item.id === dataset.unitId,
+                          )
+
+                          return (
+                            <tr key={dataset.unitId}>
+                              <td>
+                                {unit?.plant ??
+                                  'Belum dipetakan'}
+                              </td>
+
+                              <td>
+                                {unit?.name ??
+                                  dataset.unitId}
+                              </td>
+
+                              <td>
+                                {dataset.source}
+                              </td>
+
+                              <td>
+                                {dataset.tags.length}
+                              </td>
+
+                              <td>
+                                {dataset.rows.length}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="empty-content">
+                    <p>
+                      Belum ada file yang dibuka dalam
+                      sesi browser ini. Data di database
+                      tetap dapat dilihat melalui
+                      Overview dan Unit Monitoring.
+                    </p>
+                  </div>
+                )}
+
+                <div className="empty-content">
+                  <button
+                    type="button"
+                    className="outline-button"
+                    onClick={openHistorical}
+                  >
+                    Impor atau kelola data historis
+                  </button>
+                </div>
+
+                <div className="panel-footnote">
+                  Halaman ini mencatat file yang dibuka
+                  selama sesi browser. Periksa
+                  kelengkapan metadata setiap kanal
+                  pada data sumber. Analisis pelampauan
+                  batas getaran tersedia di Alarms &
+                  Events. Data PD belum tersedia.
+                </div>
+              </section>
+            </>
           ) : (
             <section className="panel page-placeholder">
               <span className="empty-icon">
@@ -771,8 +815,7 @@ function App() {
 
               <span>
                 {hydroUnits.length} unit dari database
-                {' '}· Data historis · Live belum
-                terhubung
+                {' '}· Data historis
               </span>
             </footer>
           )}

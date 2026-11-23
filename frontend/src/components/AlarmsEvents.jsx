@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  classifyVibration,
+  supportsVibrationThreshold,
+  VIBRATION_EVENT_LEVELS,
+  VIBRATION_STATUS,
+} from './vibrationThresholds.js';
 
 const API = (
   import.meta.env.VITE_API_BASE_URL ||
   'http://127.0.0.1:8000'
 ).replace(/\/+$/, '');
 
-const ALERT = 300;
-const TRIP = 400;
 const STEP = 60_000;
 
 const FORMAT = new Intl.NumberFormat('id-ID', {
@@ -85,37 +89,6 @@ function isVibration(parameter) {
   );
 }
 
-function hasMetadata(parameter) {
-  const unit = String(
-    parameter.engineering_unit || '',
-  )
-    .trim()
-    .replace(/μ/g, 'µ')
-    .toLowerCase();
-
-  return (
-    ['µm', 'um'].includes(unit) &&
-    /peak[\s_-]*to[\s_-]*peak/i.test(
-      parameter.measurement_definition || '',
-    )
-  );
-}
-
-function levelOf(row) {
-  if (
-    row.quality !== 'unverified' ||
-    !Number.isFinite(row.plot_value) ||
-    row.plot_value < 0
-  ) {
-    return null;
-  }
-
-  if (row.plot_value >= TRIP) return 'trip';
-  if (row.plot_value >= ALERT) return 'alert';
-
-  return 'below';
-}
-
 function groupEvents(rows, channel) {
   const events = [];
 
@@ -136,9 +109,10 @@ function groupEvents(rows, channel) {
   for (const row of rows) {
     const ms = sourceMs(row.measured_at);
 
-    const level = Number.isFinite(ms)
-      ? levelOf(row)
-      : null;
+    const level =
+      Number.isFinite(ms) && row.quality === 'unverified'
+        ? classifyVibration(row.plot_value)
+        : null;
 
     if (open && ms - open.lastMs !== STEP) {
       close('Jeda data');
@@ -150,8 +124,8 @@ function groupEvents(rows, channel) {
       continue;
     }
 
-    if (level === 'below') {
-      close('Turun di bawah alert');
+    if (level === 'normal') {
+      close('Kembali ke rentang normal');
       continue;
     }
 
@@ -174,16 +148,15 @@ function groupEvents(rows, channel) {
         first: row.measured_at,
         last: row.measured_at,
         lastMs: ms,
-        peak: row.plot_value,
+        extreme: row.plot_value,
         count: 1,
       };
     } else {
       open.last = row.measured_at;
       open.lastMs = ms;
-      open.peak = Math.max(
-        open.peak,
-        row.plot_value,
-      );
+      open.extreme = level === 'fail'
+        ? Math.min(open.extreme, row.plot_value)
+        : Math.max(open.extreme, row.plot_value);
       open.count += 1;
     }
   }
@@ -497,7 +470,7 @@ export default function AlarmsEvents({
                 times.push(parameter.latest_time);
               }
 
-              if (!hasMetadata(parameter)) {
+              if (!supportsVibrationThreshold(parameter)) {
                 issues.push(
                   `${unit.id} · ${parameter.tag_name}: ` +
                   'satuan µm / definisi peak-to-peak belum sesuai.',
@@ -685,6 +658,11 @@ export default function AlarmsEvents({
       event.plant === plant,
   );
 
+  const segmentCounts = { fail: 0, awareness: 0, trip: 0 };
+  for (const event of plantEvents) {
+    segmentCounts[event.level] += 1;
+  }
+
   const filtered = plantEvents.filter(
     (event) =>
       severity === 'all' ||
@@ -731,7 +709,7 @@ export default function AlarmsEvents({
           <h2>Alarms & Events</h2>
 
           <p>
-            Pelampauan batas getaran · Larona,
+            Segmen status getaran · Larona,
             Balambano, dan Karebbe
           </p>
         </div>
@@ -752,24 +730,16 @@ export default function AlarmsEvents({
           Aturan getaran · µm p-p
         </strong>
 
-        <span>
-          Di bawah alert: &lt; 300
-        </span>
-
-        <span className="ae-alert">
-          Alert: 300–&lt;400
-        </span>
-
-        <span className="ae-trip">
-          Ambang trip: ≥ 400
-        </span>
+        {Object.entries(VIBRATION_STATUS).map(([level, status]) => (
+          <span key={level} className={`ae-${level}`}>
+            {status.label}: {status.range}
+          </span>
+        ))}
       </div>
 
       <p className="ae-note">
-        Aturan sesuai arahan pengguna untuk ketiga
-        PLTA. Pelampauan ambang trip bukan bukti
-        mesin trip. Halaman ini membaca histori,
-        tidak mengirim perintah ke proteksi mesin.
+        Ambang getaran mengikuti batas mentor.
+        Status Trip di halaman ini dihitung dari pembacaan historis.
       </p>
 
       <div className="ae-toolbar">
@@ -845,13 +815,11 @@ export default function AlarmsEvents({
               Semua tingkat
             </option>
 
-            <option value="alert">
-              Alert
-            </option>
-
-            <option value="trip">
-              Ambang trip
-            </option>
+            {VIBRATION_EVENT_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {VIBRATION_STATUS[level].label}
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -882,39 +850,13 @@ export default function AlarmsEvents({
       )}
 
       <div className="ae-cards">
-        <article>
-          <span>Segmen alert</span>
-
-          <strong>
-            {completed
-              ? plantEvents.filter(
-                  (event) =>
-                    event.level === 'alert',
-                ).length
-              : '—'}
-          </strong>
-
-          <small>
-            300 ≤ nilai &lt; 400 µm p-p
-          </small>
-        </article>
-
-        <article>
-          <span>Segmen ambang trip</span>
-
-          <strong>
-            {completed
-              ? plantEvents.filter(
-                  (event) =>
-                    event.level === 'trip',
-                ).length
-              : '—'}
-          </strong>
-
-          <small>
-            Nilai ≥ 400 µm p-p
-          </small>
-        </article>
+        {VIBRATION_EVENT_LEVELS.map((level) => (
+          <article key={level}>
+            <span>Segmen {VIBRATION_STATUS[level].label}</span>
+            <strong>{completed ? segmentCounts[level] : '—'}</strong>
+            <small>{VIBRATION_STATUS[level].range} µm p-p</small>
+          </article>
+        ))}
 
         <article>
           <span>
@@ -955,7 +897,7 @@ export default function AlarmsEvents({
           {fmt(current.samples)} sampel dibaca.
           {' '}
           {issues.length
-            ? 'Cakupan memiliki catatan; angka nol tidak membuktikan seluruh kanal bebas pelampauan.'
+            ? 'Cakupan memiliki catatan; segmen pada kanal yang gagal dibaca belum dapat dievaluasi.'
             : 'Hasil hanya mencakup sampel yang dikembalikan API.'}
         </p>
       )}
@@ -986,7 +928,7 @@ export default function AlarmsEvents({
               <th>Tingkat</th>
               <th>Awal teramati</th>
               <th>Akhir teramati</th>
-              <th>Puncak µm p-p</th>
+              <th>Nilai ekstrem µm p-p</th>
               <th>Sampel</th>
               <th>Batas segmen</th>
             </tr>
@@ -1014,9 +956,7 @@ export default function AlarmsEvents({
                   <span
                     className={`ae-badge ae-${event.level}`}
                   >
-                    {event.level === 'trip'
-                      ? 'Ambang trip'
-                      : 'Alert'}
+                    {VIBRATION_STATUS[event.level].label}
                   </span>
                 </td>
 
@@ -1030,8 +970,9 @@ export default function AlarmsEvents({
 
                 <td>
                   <strong>
-                    {fmt(event.peak)}
+                    {fmt(event.extreme)}
                   </strong>
+                  <small>{event.level === 'fail' ? 'Minimum' : 'Maksimum'}</small>
                 </td>
 
                 <td>
@@ -1054,7 +995,7 @@ export default function AlarmsEvents({
                     ? 'Analisis sedang berlangsung…'
                     : !completed
                       ? 'Pilih tanggal, lalu tekan Analisis tanggal.'
-                      : 'Tidak ditemukan segmen pelampauan pada data yang berhasil dianalisis dan filter ini.'}
+                      : 'Tidak ada segmen FAIL, Alert / Awareness, atau Trip pada hasil filter ini.'}
                 </td>
               </tr>
             )}
@@ -1218,7 +1159,7 @@ const CSS = `
 
 .ae-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   margin: 18px 0;
 }
@@ -1311,7 +1252,15 @@ const CSS = `
   overflow-wrap: anywhere;
 }
 
-.ae-page .ae-alert {
+.ae-page .ae-fail {
+  color: #7041a1;
+}
+
+.ae-page .ae-normal {
+  color: #187348;
+}
+
+.ae-page .ae-awareness {
   color: #8a5900;
 }
 
@@ -1327,7 +1276,11 @@ const CSS = `
   white-space: nowrap;
 }
 
-.ae-badge.ae-alert {
+.ae-badge.ae-fail {
+  background: #efe4fb;
+}
+
+.ae-badge.ae-awareness {
   background: #fff0bf;
 }
 
