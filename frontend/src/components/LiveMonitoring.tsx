@@ -80,10 +80,6 @@ type HydrologyData = {
   matano_level: number
   mahalona_level: number
   towuti_level: number
-  batubesi_dam_level: number
-  upper_canal_level: number
-  canal_flow_rate: number
-  lower_canal_level: number
   larona_tailrace_level: number
   balambano_dam_level: number
   balambano_tailrace_level: number
@@ -91,8 +87,6 @@ type HydrologyData = {
   karebbe_dam_level: number
   karebbe_tailrace_level: number
   karebbe_outflow: number
-  petea_gates: { gate: number; open: boolean }[]
-  spillway_gates: { name: string; open_pct: number; flow_cumecs: number }[]
 }
 
 type OverviewResponse = {
@@ -123,6 +117,8 @@ const levelText = {
 
 type DemoEvent = {
   id: string
+  unit_id?: string
+  channel?: string
   level: keyof typeof levelText
   threshold: number
   first_value: number
@@ -150,6 +146,7 @@ type DemoState = {
 
 type DemoView = {
   cursor: string | null
+  filterUnit: string
   state: DemoState
 }
 
@@ -165,6 +162,7 @@ const shortTimeFormat = new Intl.DateTimeFormat('id-ID', {
   second: '2-digit',
 })
 const numberFormat = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 })
+const compactNumFormat = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 })
 const emptySnapshot: Snapshot = { status: 'loading', simulated: false, readings: [] }
 
 function isVibrationReading(reading: Reading): boolean {
@@ -181,14 +179,39 @@ function lineStyleForChannel(channel: string): { color: string; dashed: boolean 
   return { color: dashed ? '#143653' : '#0ea5e9', dashed }
 }
 
-function classifyLiveVibration(value: number | null): { label: string; tone: string } {
+function classifyLiveVibration(
+  value: number | null,
+  compact = false,
+): { label: string; tone: string } {
   if (value === null || !Number.isFinite(value) || value < 0) {
-    return { label: 'Tidak tersedia', tone: 'neutral' }
+    return { label: compact ? 'N/A' : 'Tidak tersedia', tone: 'neutral' }
   }
   if (value < 50) return { label: 'FAIL', tone: 'fail' }
   if (value < 250) return { label: 'Normal', tone: 'normal' }
-  if (value < 350) return { label: 'Alert / Awareness', tone: 'alert' }
-  return { label: 'Melewati Ambang Trip', tone: 'trip' }
+  if (value < 350) return { label: compact ? 'Alert' : 'Alert / Awareness', tone: 'alert' }
+  return { label: compact ? 'Trip' : 'Melewati Ambang Trip', tone: 'trip' }
+}
+
+function formatAlertChannelOrigin(unitId: string, channel: string, units: HydroUnit[]): string {
+  const matched = units.find((u) => u.id === unitId)
+  const plantLabel = matched
+    ? `PLTA ${matched.plant} · ${matched.name} (${unitId})`
+    : unitId.startsWith('LRN')
+      ? `PLTA Larona (${unitId})`
+      : unitId.startsWith('BLB')
+        ? `PLTA Balambano (${unitId})`
+        : unitId.startsWith('KRB')
+          ? `PLTA Karebbe (${unitId})`
+          : unitId
+
+  const upper = channel.trim().toUpperCase()
+  const axis = upper.endsWith('X') || upper.includes(' X')
+    ? 'Sumbu X'
+    : upper.endsWith('Y') || upper.includes(' Y')
+      ? 'Sumbu Y'
+      : null
+
+  return axis ? `${plantLabel} · ${channel} (${axis})` : `${plantLabel} · ${channel}`
 }
 
 function unitPeakVibration(unit: OverviewUnit, demoOverride: DemoOverride): number | null {
@@ -220,6 +243,7 @@ function toneColor(tone: string): string {
 function newestDemoView(current: DemoView, next: DemoView): DemoView {
   if (
     current.cursor === next.cursor &&
+    current.filterUnit === next.filterUnit &&
     current.state.enabled &&
     next.state.enabled &&
     current.state.instance_id === next.state.instance_id &&
@@ -230,8 +254,12 @@ function newestDemoView(current: DemoView, next: DemoView): DemoView {
   return next
 }
 
-function buildCursorQuery(cursor: string | null): string {
-  return cursor ? `?before=${encodeURIComponent(cursor)}` : ''
+function buildAlertsQuery(cursor: string | null, unitFilter: string): string {
+  const params = new URLSearchParams()
+  if (cursor) params.set('before', cursor)
+  if (unitFilter && unitFilter !== 'ALL') params.set('unit_id', unitFilter)
+  const qs = params.toString()
+  return qs ? `?${qs}` : ''
 }
 
 function gaugeArcPath(startVal: number, endVal: number, cx = 110, cy = 104, r = 78): string {
@@ -242,89 +270,6 @@ function gaugeArcPath(startVal: number, endVal: number, cx = 110, cy = 104, r = 
   const x2 = cx + r * Math.cos(endAngle)
   const y2 = cy - r * Math.sin(endAngle)
   return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`
-}
-
-function PlantOpsTable({
-  plantName,
-  plantUnits,
-  outflow,
-  demoOverride,
-  onOpenUnit,
-}: {
-  plantName: string
-  plantUnits: OverviewUnit[]
-  outflow?: number
-  demoOverride: DemoOverride
-  onOpenUnit: (unitId: string) => void
-}) {
-  const totalMw = plantUnits.reduce((sum, u) => sum + (u.ops?.pa_mw ?? 0), 0)
-
-  return (
-    <div className="hydro-ops-table-card">
-      <div className="hydro-ops-table-title">
-        <strong>{plantName.toUpperCase()}</strong>
-        <span>Total: <b>{numberFormat.format(totalMw)} MW</b></span>
-      </div>
-      <div className="hydro-ops-table-scroll">
-        <table className="hydro-ops-table">
-          <thead>
-            <tr>
-              <th>Parameter</th>
-              {plantUnits.map((u, idx) => {
-                const peak = unitPeakVibration(u, demoOverride)
-                const tone = classifyLiveVibration(peak).tone
-                return (
-                  <th key={u.unit_id}>
-                    <button
-                      type="button"
-                      className={`hydro-ops-unit-pill tone-${tone}`}
-                      onClick={() => onOpenUnit(u.unit_id)}
-                    >
-                      UNIT #{idx + 1}
-                    </button>
-                  </th>
-                )
-              })}
-              <th>Satuan</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Pa</td>
-              {plantUnits.map((u) => <td key={u.unit_id}>{u.ops ? numberFormat.format(u.ops.pa_mw) : '—'}</td>)}
-              <td className="unit-col">MW</td>
-            </tr>
-            <tr>
-              <td>Pa Setpoint</td>
-              {plantUnits.map((u) => <td key={u.unit_id}>{u.ops ? numberFormat.format(u.ops.pa_setpoint_mw) : '—'}</td>)}
-              <td className="unit-col">MW</td>
-            </tr>
-            <tr>
-              <td>Pr</td>
-              {plantUnits.map((u) => <td key={u.unit_id}>{u.ops ? numberFormat.format(u.ops.pr_mvar) : '—'}</td>)}
-              <td className="unit-col">MVAr</td>
-            </tr>
-            <tr>
-              <td>Penst Flow</td>
-              {plantUnits.map((u) => <td key={u.unit_id}>{u.ops ? numberFormat.format(u.ops.penstock_flow) : '—'}</td>)}
-              <td className="unit-col">m³/s</td>
-            </tr>
-            <tr>
-              <td>Efficiency</td>
-              {plantUnits.map((u) => <td key={u.unit_id}>{u.ops ? numberFormat.format(u.ops.efficiency) : '—'}</td>)}
-              <td className="unit-col">MW/m³/s</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      {outflow !== undefined && (
-        <div className="hydro-ops-outflow">
-          <span>Outflow {plantName}</span>
-          <strong>{numberFormat.format(outflow)} Cumecs</strong>
-        </div>
-      )}
-    </div>
-  )
 }
 
 function HydroCascadeMap({
@@ -372,32 +317,28 @@ function HydroCascadeMap({
           <circle
             cx={cx}
             cy={cy}
-            r="22"
+            r="21"
             fill={fill}
             opacity="0.28"
             className="hydro-cascade-halo"
           />
         )}
-        <circle cx={cx} cy={cy} r="15" fill={fill} stroke="#ffffff" strokeWidth="2.5" />
-        <text x={cx} y={cy + 4} textAnchor="middle" fill="#ffffff" fontSize="10" fontWeight="700">
+        <circle cx={cx} cy={cy} r="14" fill={fill} stroke="#ffffff" strokeWidth="2.5" />
+        <text x={cx} y={cy + 3.5} textAnchor="middle" fill="#ffffff" fontSize="9.5" fontWeight="700">
           {shortLabel}
         </text>
       </g>
     )
   }
 
-  const laronaUnits = units.filter((u) => u.plant === 'Larona')
-  const balambanoUnits = units.filter((u) => u.plant === 'Balambano')
-  const karebbeUnits = units.filter((u) => u.plant === 'Karebbe')
-
   return (
-    <section className="hydro-cascade-card" aria-label="Skema aliran kaskade PLTA PT Vale">
+    <section className="hydro-cascade-card is-compact" aria-label="Skema aliran kaskade PLTA PT Vale">
       <div className="hydro-cascade-header">
         <div>
-          <h2>Utilities Power Overview · Kaskade Matano hingga Karebbe</h2>
+          <h2>Skema Kaskade PLTA · Matano hingga Karebbe</h2>
           <p>
             {simulated && <span className="hydro-live-demo-label">Data simulasi</span>}
-            Aliran air, elevasi m(ASL), tabel operasi Pa/Pr/Penstock Flow/Efficiency, dan status 7 unit. Klik unit untuk buka detail.
+            Klik lingkaran unit (G1–G3) untuk membuka detail monitoring.
           </p>
         </div>
         <div className="hydro-cascade-legend">
@@ -408,89 +349,8 @@ function HydroCascadeMap({
         </div>
       </div>
 
-      {/* Baris atas: Hidrologi Hulu + 3 Tabel Operasi PLTA */}
-      <div className="hydro-scada-top-grid">
-        {hydrology && (
-          <div className="hydro-hydrology-box">
-            <div className="hydro-ops-table-title">
-              <strong>HIDROLOGI &amp; KANAL</strong>
-              <span>Hulu Larona</span>
-            </div>
-            <dl className="hydro-hydrology-list">
-              <div>
-                <dt>Batubesi Dam Level</dt>
-                <dd>{numberFormat.format(hydrology.batubesi_dam_level)} m(ASL)</dd>
-              </div>
-              <div>
-                <dt>Upper Canal Level</dt>
-                <dd>{numberFormat.format(hydrology.upper_canal_level)} m(ASL)</dd>
-              </div>
-              <div>
-                <dt>Canal Flow Rate</dt>
-                <dd>{numberFormat.format(hydrology.canal_flow_rate)} Cumecs</dd>
-              </div>
-              <div>
-                <dt>Lower Canal Level</dt>
-                <dd>{numberFormat.format(hydrology.lower_canal_level)} m(ASL)</dd>
-              </div>
-              <div>
-                <dt>Larona Tailrace</dt>
-                <dd>{numberFormat.format(hydrology.larona_tailrace_level)} m(ASL)</dd>
-              </div>
-            </dl>
-
-            <div className="hydro-petea-row">
-              <span>Petea Gate Open</span>
-              <div className="hydro-petea-gates">
-                {hydrology.petea_gates.map((g) => (
-                  <span
-                    key={g.gate}
-                    className={`hydro-gate-box ${g.open ? 'is-open' : 'is-closed'}`}
-                    title={`Petea Gate ${g.gate}: ${g.open ? 'Terbuka' : 'Tertutup'}`}
-                  >
-                    {g.gate}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="hydro-spg-grid">
-              {hydrology.spillway_gates.map((spg) => (
-                <div key={spg.name} className="hydro-spg-item">
-                  <span>{spg.name}</span>
-                  <strong>{numberFormat.format(spg.open_pct)}%</strong>
-                  <small>{numberFormat.format(spg.flow_cumecs)} Cumecs</small>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <PlantOpsTable
-          plantName="Larona"
-          plantUnits={laronaUnits}
-          demoOverride={demoOverride}
-          onOpenUnit={onOpenUnit}
-        />
-        <PlantOpsTable
-          plantName="Balambano"
-          plantUnits={balambanoUnits}
-          outflow={hydrology?.balambano_outflow}
-          demoOverride={demoOverride}
-          onOpenUnit={onOpenUnit}
-        />
-        <PlantOpsTable
-          plantName="Karebbe"
-          plantUnits={karebbeUnits}
-          outflow={hydrology?.karebbe_outflow}
-          demoOverride={demoOverride}
-          onOpenUnit={onOpenUnit}
-        />
-      </div>
-
-      {/* Diagram kaskade SVG dengan elevasi m(ASL) & indikator G1-G3 */}
       <div className="hydro-cascade-svg-wrap">
-        <svg viewBox="0 0 1120 330" role="img" aria-label="Diagram aliran air dan status 7 unit PLTA">
+        <svg viewBox="0 0 1120 270" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Diagram aliran air dan status 7 unit PLTA">
           <defs>
             <linearGradient id="hydroSky" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#f8fcff" />
@@ -503,24 +363,22 @@ function HydroCascadeMap({
             </linearGradient>
           </defs>
 
-          <rect x="0" y="0" width="1120" height="330" rx="10" fill="url(#hydroSky)" />
+          <rect x="0" y="0" width="1120" height="270" rx="8" fill="url(#hydroSky)" />
 
-          {/* Badan air bertingkat: Matano -> Mahalona -> Towuti -> Larona -> Balambano -> Karebbe */}
           <path
             d="
-              M 18 128 L 145 128 L 165 144 L 275 144 L 295 160 L 455 160
-              L 470 218 L 690 218 L 710 246 L 895 246 L 915 274 L 1105 274
-              L 1105 316 L 18 316 Z
+              M 16 96 L 145 96 L 165 110 L 275 110 L 295 124 L 455 124
+              L 470 176 L 690 176 L 710 202 L 895 202 L 915 228 L 1106 228
+              L 1106 260 L 16 260 Z
             "
             fill="url(#hydroWater)"
             opacity="0.88"
           />
 
-          {/* Garis animasi arus air mengalir */}
           <path
             d="
-              M 28 142 L 140 142 L 168 158 L 272 158 L 298 174 L 448 174
-              L 476 232 L 685 232 L 714 260 L 890 260 L 918 288 L 1098 288
+              M 24 110 L 140 110 L 168 124 L 272 124 L 298 138 L 448 138
+              L 476 190 L 685 190 L 714 216 L 890 216 L 918 242 L 1098 242
             "
             fill="none"
             stroke="#e0f2fe"
@@ -529,96 +387,88 @@ function HydroCascadeMap({
             className="hydro-cascade-flow"
           />
 
-          {/* Kontur pemisah danau */}
-          <polygon points="135,195 152,140 172,195" fill="#94a3b8" />
-          <polygon points="268,210 284,156 304,210" fill="#94a3b8" />
+          <polygon points="135,160 152,108 172,160" fill="#94a3b8" />
+          <polygon points="268,175 284,122 304,175" fill="#94a3b8" />
 
-          {/* Elevasi 3 Danau Hulu */}
           <g>
-            <rect x="20" y="56" width="118" height="46" rx="6" fill="#ffffff" stroke="#cbd5e1" />
-            <text x="79" y="74" textAnchor="middle" fill="#143653" fontSize="11" fontWeight="700">Matano Lake</text>
-            <text x="79" y="92" textAnchor="middle" fill="#0369a1" fontSize="11" fontWeight="700">
+            <rect x="20" y="34" width="118" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1" />
+            <text x="79" y="51" textAnchor="middle" fill="#143653" fontSize="11" fontWeight="700">Matano Lake</text>
+            <text x="79" y="68" textAnchor="middle" fill="#0369a1" fontSize="11" fontWeight="700">
               {hydrology ? `${numberFormat.format(hydrology.matano_level)} m(ASL)` : '—'}
             </text>
-            <line x1="79" y1="102" x2="79" y2="128" stroke="#94a3b8" strokeDasharray="3 2" />
+            <line x1="79" y1="78" x2="79" y2="96" stroke="#94a3b8" strokeDasharray="3 2" />
 
-            <rect x="158" y="72" width="122" height="46" rx="6" fill="#ffffff" stroke="#cbd5e1" />
-            <text x="219" y="90" textAnchor="middle" fill="#143653" fontSize="11" fontWeight="700">Mahalona Lake</text>
-            <text x="219" y="108" textAnchor="middle" fill="#0369a1" fontSize="11" fontWeight="700">
+            <rect x="158" y="48" width="122" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1" />
+            <text x="219" y="65" textAnchor="middle" fill="#143653" fontSize="11" fontWeight="700">Mahalona Lake</text>
+            <text x="219" y="82" textAnchor="middle" fill="#0369a1" fontSize="11" fontWeight="700">
               {hydrology ? `${numberFormat.format(hydrology.mahalona_level)} m(ASL)` : '—'}
             </text>
-            <line x1="219" y1="118" x2="219" y2="144" stroke="#94a3b8" strokeDasharray="3 2" />
+            <line x1="219" y1="92" x2="219" y2="110" stroke="#94a3b8" strokeDasharray="3 2" />
 
-            <rect x="302" y="88" width="118" height="46" rx="6" fill="#ffffff" stroke="#cbd5e1" />
-            <text x="361" y="106" textAnchor="middle" fill="#143653" fontSize="11" fontWeight="700">Towuti Lake</text>
-            <text x="361" y="124" textAnchor="middle" fill="#0369a1" fontSize="11" fontWeight="700">
+            <rect x="302" y="62" width="118" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1" />
+            <text x="361" y="79" textAnchor="middle" fill="#143653" fontSize="11" fontWeight="700">Towuti Lake</text>
+            <text x="361" y="96" textAnchor="middle" fill="#0369a1" fontSize="11" fontWeight="700">
               {hydrology ? `${numberFormat.format(hydrology.towuti_level)} m(ASL)` : '—'}
             </text>
-            <line x1="361" y1="134" x2="361" y2="160" stroke="#94a3b8" strokeDasharray="3 2" />
+            <line x1="361" y1="106" x2="361" y2="124" stroke="#94a3b8" strokeDasharray="3 2" />
           </g>
 
-          {/* ===== PLTA LARONA (G1, G2, G3) ===== */}
-          <polygon points="442,146 472,146 485,228 434,228" fill="#475569" />
-          <rect x="476" y="156" width="166" height="66" rx="8" fill="#1e3a5f" stroke="#0f172a" strokeWidth="1.5" />
-          <text x="559" y="174" textAnchor="middle" fill="#e2e8f0" fontSize="10.5" fontWeight="700">
+          <polygon points="442,110 472,110 485,186 434,186" fill="#475569" />
+          <rect x="476" y="120" width="166" height="62" rx="8" fill="#1e3a5f" stroke="#0f172a" strokeWidth="1.5" />
+          <text x="559" y="137" textAnchor="middle" fill="#e2e8f0" fontSize="10.5" fontWeight="700">
             PLTA LARONA
           </text>
-          {renderUnitNode('LRN-01', 'G1', 511, 198)}
-          {renderUnitNode('LRN-02', 'G2', 559, 198)}
-          {renderUnitNode('LRN-03', 'G3', 607, 198)}
+          {renderUnitNode('LRN-01', 'G1', 511, 160)}
+          {renderUnitNode('LRN-02', 'G2', 559, 160)}
+          {renderUnitNode('LRN-03', 'G3', 607, 160)}
 
-          {/* Elevasi Larona Tailrace & Balambano Dam */}
           {hydrology && (
             <g>
-              <rect x="572" y="100" width="128" height="42" rx="6" fill="#ffffff" stroke="#cbd5e1" />
-              <text x="636" y="116" textAnchor="middle" fill="#475569" fontSize="9.5" fontWeight="700">Larona Tailrace / BLB Dam</text>
-              <text x="636" y="133" textAnchor="middle" fill="#0369a1" fontSize="10.5" fontWeight="700">
+              <rect x="572" y="66" width="130" height="40" rx="6" fill="#ffffff" stroke="#cbd5e1" />
+              <text x="637" y="81" textAnchor="middle" fill="#475569" fontSize="9.5" fontWeight="700">Larona Tailrace / BLB Dam</text>
+              <text x="637" y="97" textAnchor="middle" fill="#0369a1" fontSize="10.5" fontWeight="700">
                 {numberFormat.format(hydrology.larona_tailrace_level)} / {numberFormat.format(hydrology.balambano_dam_level)} m
               </text>
             </g>
           )}
 
-          {/* ===== PLTA BALAMBANO (G1, G2) ===== */}
-          <polygon points="684,202 714,202 726,256 676,256" fill="#475569" />
-          <rect x="718" y="188" width="134" height="66" rx="8" fill="#1e3a5f" stroke="#0f172a" strokeWidth="1.5" />
-          <text x="785" y="206" textAnchor="middle" fill="#e2e8f0" fontSize="10.5" fontWeight="700">
+          <polygon points="684,160 714,160 726,212 676,212" fill="#475569" />
+          <rect x="718" y="148" width="134" height="62" rx="8" fill="#1e3a5f" stroke="#0f172a" strokeWidth="1.5" />
+          <text x="785" y="165" textAnchor="middle" fill="#e2e8f0" fontSize="10.5" fontWeight="700">
             PLTA BALAMBANO
           </text>
-          {renderUnitNode('BLB-01', 'G1', 758, 230)}
-          {renderUnitNode('BLB-02', 'G2', 812, 230)}
+          {renderUnitNode('BLB-01', 'G1', 758, 188)}
+          {renderUnitNode('BLB-02', 'G2', 812, 188)}
 
-          {/* Elevasi Balambano Tailrace & Karebbe Dam */}
           {hydrology && (
             <g>
-              <rect x="782" y="128" width="132" height="42" rx="6" fill="#ffffff" stroke="#cbd5e1" />
-              <text x="848" y="144" textAnchor="middle" fill="#475569" fontSize="9.5" fontWeight="700">BLB Tailrace / KRB Dam</text>
-              <text x="848" y="161" textAnchor="middle" fill="#0369a1" fontSize="10.5" fontWeight="700">
+              <rect x="782" y="92" width="134" height="40" rx="6" fill="#ffffff" stroke="#cbd5e1" />
+              <text x="849" y="107" textAnchor="middle" fill="#475569" fontSize="9.5" fontWeight="700">BLB Tailrace / KRB Dam</text>
+              <text x="849" y="123" textAnchor="middle" fill="#0369a1" fontSize="10.5" fontWeight="700">
                 {numberFormat.format(hydrology.balambano_tailrace_level)} / {numberFormat.format(hydrology.karebbe_dam_level)} m
               </text>
             </g>
           )}
 
-          {/* ===== PLTA KAREBBE (G1, G2) ===== */}
-          <polygon points="894,230 924,230 936,284 886,284" fill="#475569" />
-          <rect x="928" y="216" width="134" height="66" rx="8" fill="#1e3a5f" stroke="#0f172a" strokeWidth="1.5" />
-          <text x="995" y="234" textAnchor="middle" fill="#e2e8f0" fontSize="10.5" fontWeight="700">
+          <polygon points="894,186 924,186 936,238 886,238" fill="#475569" />
+          <rect x="928" y="174" width="134" height="62" rx="8" fill="#1e3a5f" stroke="#0f172a" strokeWidth="1.5" />
+          <text x="995" y="191" textAnchor="middle" fill="#e2e8f0" fontSize="10.5" fontWeight="700">
             PLTA KAREBBE
           </text>
-          {renderUnitNode('KRB-01', 'G1', 968, 258)}
-          {renderUnitNode('KRB-02', 'G2', 1022, 258)}
+          {renderUnitNode('KRB-01', 'G1', 968, 214)}
+          {renderUnitNode('KRB-02', 'G2', 1022, 214)}
 
-          {/* Elevasi Karebbe Tailrace */}
           {hydrology && (
             <g>
-              <rect x="962" y="156" width="134" height="42" rx="6" fill="#ffffff" stroke="#cbd5e1" />
-              <text x="1029" y="172" textAnchor="middle" fill="#475569" fontSize="9.5" fontWeight="700">Karebbe Tailrace Wtr</text>
-              <text x="1029" y="189" textAnchor="middle" fill="#0369a1" fontSize="10.5" fontWeight="700">
+              <rect x="962" y="118" width="136" height="40" rx="6" fill="#ffffff" stroke="#cbd5e1" />
+              <text x="1030" y="133" textAnchor="middle" fill="#475569" fontSize="9.5" fontWeight="700">Karebbe Tailrace Wtr</text>
+              <text x="1030" y="149" textAnchor="middle" fill="#0369a1" fontSize="10.5" fontWeight="700">
                 {numberFormat.format(hydrology.karebbe_tailrace_level)} m(ASL)
               </text>
             </g>
           )}
 
-          <text x="1096" y="308" textAnchor="end" fill="#0c4a6e" fontSize="10.5" fontWeight="700">
+          <text x="1096" y="253" textAnchor="end" fill="#0c4a6e" fontSize="10.5" fontWeight="700">
             Outflow Karebbe {hydrology ? `${numberFormat.format(hydrology.karebbe_outflow)} Cumecs` : ''} →
           </text>
         </svg>
@@ -629,27 +479,27 @@ function HydroCascadeMap({
 
 function LiveVibrationGauge({
   value,
-  channelCount,
+  compact = false,
 }: {
   value: number | null
-  channelCount: number
+  compact?: boolean
 }) {
   const clamped = value !== null && Number.isFinite(value) ? Math.max(0, Math.min(400, value)) : 0
   const needleDeg = -90 + (clamped / 400) * 180
 
   return (
-    <div className="hydro-live-gauge" aria-label="Gauge getaran unit">
-      <svg viewBox="0 0 220 128" role="img" aria-hidden="true">
+    <div className={`hydro-live-gauge ${compact ? 'is-compact' : ''}`} aria-label="Gauge getaran unit">
+      <svg viewBox="0 0 220 124" role="img" aria-hidden="true">
         <path d={gaugeArcPath(0, 50)} fill="none" stroke="#8b5cf6" strokeWidth="14" strokeLinecap="butt" />
         <path d={gaugeArcPath(50, 250)} fill="none" stroke="#16a34a" strokeWidth="14" strokeLinecap="butt" />
         <path d={gaugeArcPath(250, 350)} fill="none" stroke="#f59e0b" strokeWidth="14" strokeLinecap="butt" />
         <path d={gaugeArcPath(350, 400)} fill="none" stroke="#dc2626" strokeWidth="14" strokeLinecap="butt" />
 
-        <text x="20" y="114" fontSize="9.5" fill="#526980" textAnchor="middle">0</text>
-        <text x="36" y="65" fontSize="9.5" fill="#6b21a8" textAnchor="middle">50</text>
-        <text x="148" y="25" fontSize="9.5" fill="#b45309" textAnchor="middle">250</text>
-        <text x="190" y="65" fontSize="9.5" fill="#b91c1c" textAnchor="middle">350</text>
-        <text x="200" y="114" fontSize="9.5" fill="#526980" textAnchor="middle">400</text>
+        <text x="20" y="114" fontSize="10" fill="#526980" textAnchor="middle">0</text>
+        <text x="36" y="65" fontSize="10" fill="#6b21a8" textAnchor="middle">50</text>
+        <text x="148" y="25" fontSize="10" fill="#b45309" textAnchor="middle">250</text>
+        <text x="190" y="65" fontSize="10" fill="#b91c1c" textAnchor="middle">350</text>
+        <text x="200" y="114" fontSize="10" fill="#526980" textAnchor="middle">400</text>
 
         <g
           className="hydro-live-gauge-needle"
@@ -666,19 +516,28 @@ function LiveVibrationGauge({
 
       <div className="hydro-live-gauge-readout">
         <strong>{value !== null ? numberFormat.format(value) : '—'}</strong>
-        <span>µm p-p · puncak {channelCount} kanal</span>
+        <span>µm p-p</span>
       </div>
     </div>
   )
 }
 
 function LiveAlertDemo({
+  units,
+  compact = false,
   onDemoReadingChange,
 }: {
+  units: HydroUnit[]
+  compact?: boolean
   onDemoReadingChange?: (override: DemoOverride) => void
 }) {
   const [pageCursors, setPageCursors] = useState<(string | null)[]>([null])
-  const [view, setView] = useState<DemoView>({ cursor: null, state: { enabled: false } })
+  const [filterUnit, setFilterUnit] = useState<string>('ALL')
+  const [view, setView] = useState<DemoView>({
+    cursor: null,
+    filterUnit: 'ALL',
+    state: { enabled: false },
+  })
   const [connectionError, setConnectionError] = useState(false)
   const [actionError, setActionError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -688,7 +547,7 @@ function LiveAlertDemo({
 
   useEffect(() => {
     if (!onDemoReadingChange) return
-    if (demo.enabled && demo.reading) {
+    if (demo.enabled && demo.running && demo.reading) {
       onDemoReadingChange({ unitId: demo.unit_id, value: demo.reading.value })
     } else {
       onDemoReadingChange(null)
@@ -702,19 +561,24 @@ function LiveAlertDemo({
     async function refresh() {
       let refreshDelay: number | undefined = demoIdleRefreshMs
       try {
-        const response = await fetch(`${alertsUrl}${buildCursorQuery(currentCursor)}`, {
-          cache: 'no-store',
-          signal: AbortSignal.any([session.signal, AbortSignal.timeout(5_000)]),
-        })
+        const response = await fetch(
+          `${alertsUrl}${buildAlertsQuery(currentCursor, filterUnit)}`,
+          {
+            cache: 'no-store',
+            signal: AbortSignal.any([session.signal, AbortSignal.timeout(5_000)]),
+          },
+        )
         if (response.status === 404) {
           refreshDelay = undefined
-          setView({ cursor: currentCursor, state: { enabled: false } })
+          setView({ cursor: currentCursor, filterUnit, state: { enabled: false } })
           return
         }
         if (!response.ok) throw new Error('Live notification service unavailable')
         const data: DemoState = await response.json()
         if (session.signal.aborted) return
-        setView((current) => newestDemoView(current, { cursor: currentCursor, state: data }))
+        setView((current) =>
+          newestDemoView(current, { cursor: currentCursor, filterUnit, state: data }),
+        )
         setConnectionError(false)
         if (data.enabled !== true) {
           refreshDelay = undefined
@@ -735,16 +599,19 @@ function LiveAlertDemo({
       session.abort()
       window.clearTimeout(next)
     }
-  }, [currentCursor])
+  }, [currentCursor, filterUnit])
 
   async function runAction(suffix: string, targetCursor: string | null) {
     setSaving(true)
     setActionError('')
     try {
-      const response = await fetch(`${alertsUrl}${suffix}${buildCursorQuery(targetCursor)}`, {
-        method: 'POST',
-        signal: AbortSignal.timeout(5_000),
-      })
+      const response = await fetch(
+        `${alertsUrl}${suffix}${buildAlertsQuery(targetCursor, filterUnit)}`,
+        {
+          method: 'POST',
+          signal: AbortSignal.timeout(5_000),
+        },
+      )
       if (!response.ok) {
         let message = 'Tindakan belum tersimpan. Coba lagi.'
         try {
@@ -759,7 +626,9 @@ function LiveAlertDemo({
         return
       }
       const data: DemoState = await response.json()
-      setView((current) => newestDemoView(current, { cursor: targetCursor, state: data }))
+      setView((current) =>
+        newestDemoView(current, { cursor: targetCursor, filterUnit, state: data }),
+      )
     } catch {
       setActionError('Tindakan belum tersimpan. Coba lagi.')
     } finally {
@@ -770,6 +639,12 @@ function LiveAlertDemo({
   function handleStart() {
     setPageCursors([null])
     void runAction('/start', null)
+  }
+
+  function handleFilterChange(nextUnit: string) {
+    setFilterUnit(nextUnit)
+    setPageCursors([null])
+    setActionError('')
   }
 
   function handleOlderPage() {
@@ -790,27 +665,60 @@ function LiveAlertDemo({
   const latestEvent = demo.events[0]
   const hasNewer = pageCursors.length > 1
   const hasOlder = demo.next_before !== null
+  const activeRunOrigin = formatAlertChannelOrigin(demo.unit_id, demo.channel, units)
 
   return (
-    <section className="hydro-live-notifications" aria-labelledby="live-alerts-title">
+    <section
+      className={`hydro-live-notifications ${compact ? 'is-compact-sidebar' : ''}`}
+      aria-labelledby="live-alerts-title"
+    >
       <div className="hydro-live-notifications-header">
         <div>
           <h2 id="live-alerts-title">Notifikasi getaran</h2>
-          <p><span className="hydro-live-demo-label">Data simulasi</span> Larona Unit 2 ({demo.unit_id}) · {demo.channel}</p>
+          <p>
+            <span className="hydro-live-demo-label">Data simulasi</span>
+            {demo.running
+              ? `Aktif: ${activeRunOrigin}`
+              : filterUnit === 'ALL'
+                ? 'Seluruh Armada · 3 PLTA (7 Unit)'
+                : formatAlertChannelOrigin(filterUnit, 'Semua Kanal', units)}
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={handleStart}
-          disabled={saving || demo.running || demo.history_unavailable}
-        >
-          {demo.running ? 'Simulasi berjalan' : demo.reading ? 'Ulangi simulasi' : 'Jalankan simulasi'}
-        </button>
+
+        <div className="hydro-live-notifications-controls">
+          <select
+            aria-label="Filter dan target unit notifikasi"
+            value={filterUnit}
+            onChange={(e) => handleFilterChange(e.target.value)}
+            className="hydro-live-notif-select"
+          >
+            <option value="ALL">Semua Unit (7 Unit)</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.id} · {u.plant} {u.name}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={saving || demo.running || demo.history_unavailable}
+          >
+            {demo.running ? 'Berjalan...' : demo.reading ? 'Ulangi simulasi' : 'Jalankan simulasi'}
+          </button>
+        </div>
       </div>
 
       <div className="hydro-live-notifications-summary">
-        <span>Pembacaan simulasi <strong>{demo.reading ? `${numberFormat.format(demo.reading.value)} ${demo.unit}` : '—'}</strong></span>
+        <span>
+          Pembacaan:{' '}
+          <strong>
+            {demo.reading ? `${numberFormat.format(demo.reading.value)} ${demo.unit}` : '—'}
+          </strong>
+        </span>
         <span role="status">
-          {unread} belum dilihat{latestEvent ? ` · Terakhir ${levelText[latestEvent.level]}` : ''}
+          {unread} belum dilihat{latestEvent ? ` · ${levelText[latestEvent.level]}` : ''}
         </span>
       </div>
 
@@ -830,60 +738,76 @@ function LiveAlertDemo({
         </p>
       )}
 
-      {demo.events.length > 0 && (
+      {demo.events.length > 0 ? (
         <ul className="hydro-live-events">
-          {demo.events.map((event) => (
-            <li key={event.id} data-level={event.level}>
-              <div className="hydro-live-event-body">
-                <h3>{levelText[event.level]}</h3>
-                <p>
-                  Puncak <strong>{numberFormat.format(event.peak_value)} {demo.unit}</strong> · Ambang {event.threshold} {demo.unit}
-                </p>
-                <p>
-                  <time dateTime={event.measured_at}>{timeFormat.format(new Date(event.measured_at))} WITA</time>
-                </p>
-                <details className="hydro-live-event-details">
-                  <summary>Detail pembacaan</summary>
-                  <dl>
-                    <div>
-                      <dt>Pemicu awal</dt>
-                      <dd>{numberFormat.format(event.first_value)} {demo.unit}</dd>
-                    </div>
-                    <div>
-                      <dt>Nilai terakhir</dt>
-                      <dd>
-                        {numberFormat.format(event.last_value)} {demo.unit} ({timeFormat.format(new Date(event.last_measured_at))} WITA)
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Waktu dilihat</dt>
-                      <dd>
-                        {event.acknowledged_at
-                          ? `${timeFormat.format(new Date(event.acknowledged_at))} WITA`
-                          : 'Belum dilihat'}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>ID notifikasi</dt>
-                      <dd><code>{event.id}</code></dd>
-                    </div>
-                  </dl>
-                </details>
-              </div>
-              {event.acknowledged_at ? (
-                <span className="hydro-live-alert-viewed">Sudah dilihat</span>
-              ) : (
-                <button
-                  type="button"
-                  disabled={saving || demo.history_unavailable}
-                  onClick={() => void runAction(`/${event.id}/ack`, currentCursor)}
-                >
-                  Tandai sudah dilihat
-                </button>
-              )}
-            </li>
-          ))}
+          {demo.events.map((event) => {
+            const evOrigin = formatAlertChannelOrigin(
+              event.unit_id || demo.unit_id,
+              event.channel || demo.channel,
+              units,
+            )
+            return (
+              <li key={event.id} data-level={event.level}>
+                <div className="hydro-live-event-body">
+                  <h3>{levelText[event.level]}</h3>
+                  <p className="hydro-live-event-origin">{evOrigin}</p>
+                  <p>
+                    Puncak <strong>{numberFormat.format(event.peak_value)} {demo.unit}</strong> · Ambang {event.threshold} {demo.unit}
+                  </p>
+                  <p>
+                    <time dateTime={event.measured_at}>{timeFormat.format(new Date(event.measured_at))} WITA</time>
+                  </p>
+                  <details className="hydro-live-event-details">
+                    <summary>Detail pembacaan</summary>
+                    <dl>
+                      <div>
+                        <dt>Sumber</dt>
+                        <dd>{evOrigin}</dd>
+                      </div>
+                      <div>
+                        <dt>Pemicu awal</dt>
+                        <dd>{numberFormat.format(event.first_value)} {demo.unit}</dd>
+                      </div>
+                      <div>
+                        <dt>Nilai terakhir</dt>
+                        <dd>
+                          {numberFormat.format(event.last_value)} {demo.unit} ({timeFormat.format(new Date(event.last_measured_at))} WITA)
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Waktu dilihat</dt>
+                        <dd>
+                          {event.acknowledged_at
+                            ? `${timeFormat.format(new Date(event.acknowledged_at))} WITA`
+                            : 'Belum dilihat'}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>ID notifikasi</dt>
+                        <dd><code>{event.id}</code></dd>
+                      </div>
+                    </dl>
+                  </details>
+                </div>
+                {event.acknowledged_at ? (
+                  <span className="hydro-live-alert-viewed">Sudah dilihat</span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={saving || demo.history_unavailable}
+                    onClick={() => void runAction(`/${event.id}/ack`, currentCursor)}
+                  >
+                    Tandai dilihat
+                  </button>
+                )}
+              </li>
+            )
+          })}
         </ul>
+      ) : (
+        <p className="hydro-live-events-empty">
+          Belum ada riwayat notifikasi untuk pilihan unit ini. Klik <strong>Jalankan simulasi</strong> untuk menguji.
+        </p>
       )}
 
       {(hasNewer || hasOlder) && (
@@ -1029,7 +953,6 @@ export default function LiveMonitoring({
   const isVibrationAnalysis = activePage === 'Vibration Analysis'
   const isAlarms = activePage === 'Alarms & Events'
 
-  // Polling seluruh 7 unit + hidrologi saat halaman Overview Live terbuka
   useEffect(() => {
     if (!isOverview) return
     const session = new AbortController()
@@ -1062,7 +985,6 @@ export default function LiveMonitoring({
     }
   }, [isOverview])
 
-  // Polling per unit + menyusun titik grafik animasi getaran sesuai kanal unit
   useEffect(() => {
     if (isPartialDischarge || isOverview) return
     const session = new AbortController()
@@ -1140,7 +1062,7 @@ export default function LiveMonitoring({
       <main className="hydro-live">
         <div className="hydro-live-header">
           <div>
-            <h1>Partial Discharge · Real-time</h1>
+            <h1>Partial Discharge</h1>
             <p>Pemantauan langsung Partial Discharge belum tersedia.</p>
           </div>
           <span className="hydro-live-status" data-status="not_configured">
@@ -1158,12 +1080,12 @@ export default function LiveMonitoring({
   }
 
   const pageTitle = isOverview
-    ? 'Overview'
+    ? 'Overview(Live)'
     : isVibrationAnalysis
-      ? 'Vibration Analysis · Real-time (Live)'
+      ? 'Vibration Analysis'
       : isAlarms
-        ? 'Alarms & Events · Real-time (Live)'
-        : 'Unit Monitoring · Real-time (Live)'
+        ? 'Alarms & Events'
+        : 'Unit Monitoring'
 
   const pageSubtitle = isOverview
     ? 'PT Vale Indonesia Hydroelectric Power Plant'
@@ -1194,154 +1116,190 @@ export default function LiveMonitoring({
   )
 
   return (
-    <main className="hydro-live">
-      <div className="hydro-live-header">
-        <div>
-          <h1>{pageTitle}</h1>
-          <p>{pageSubtitle}</p>
+    <main className={`hydro-live ${isOverview ? 'is-overview-compact' : ''}`}>
+      {isOverview ? (
+        <div className="hydro-overview-top-compact">
+          <div className="hydro-overview-title-block">
+            <h1>{pageTitle}</h1>
+            <p>{pageSubtitle}</p>
+          </div>
+
+          <div className="hydro-kpi-inline-strip">
+            <div className="hydro-kpi-mini">
+              <span>Unit Aktif</span>
+              <strong>{overview.units.length || 7} / 7 Unit</strong>
+            </div>
+            <div className="hydro-kpi-mini">
+              <span>Total Daya (3 PLTA)</span>
+              <strong>{numberFormat.format(totalFleetMw)} MW</strong>
+            </div>
+            <div className="hydro-kpi-mini">
+              <span>Status Armada</span>
+              <strong>
+                {fleetCounts.normal} Normal · {fleetCounts.alert} Alert · {fleetCounts.critical} Kritis
+              </strong>
+            </div>
+            <span className="hydro-live-status" data-status={headerStatus} role="status">
+              <span className="hydro-live-pulse-dot" />
+              {isSimulated && headerStatus === 'live' ? 'Live' : statusText[headerStatus]}
+            </span>
+          </div>
         </div>
-        <span className="hydro-live-status" data-status={headerStatus} role="status">
-          {isSimulated && headerStatus === 'live' ? 'Live · Data simulasi' : statusText[headerStatus]}
-        </span>
-      </div>
+      ) : (
+        <div className="hydro-live-header">
+          <div>
+            <h1>{pageTitle}</h1>
+            <p>{pageSubtitle}</p>
+          </div>
+          <span className="hydro-live-status" data-status={headerStatus} role="status">
+            {isSimulated && headerStatus === 'live' ? 'Live' : statusText[headerStatus]}
+          </span>
+        </div>
+      )}
 
       {isOverview ? (
         <>
           {overview.units.length > 0 && (
-            <>
-              <section className="hydro-live-fleet-bar" aria-label="Ringkasan armada PLTA">
-                <div className="hydro-live-fleet-kpi">
-                  <span>Total Unit Aktif</span>
-                  <strong>{overview.units.length} / 7 Unit</strong>
+            <div className="hydro-overview-body-split">
+              <div className="hydro-overview-main-left">
+                <div className="hydro-live-plants-row">
+                  {plantOrder.map((plantName) => {
+                    const groupUnits = overview.units.filter((u) => u.plant === plantName)
+                    if (groupUnits.length === 0) return null
+                    const plantMw = groupUnits.reduce((sum, u) => {
+                      const mw = u.readings.find((r) => r.channel === 'Daya Aktif')?.value ?? 0
+                      return sum + (mw ?? 0)
+                    }, 0)
+
+                    return (
+                      <section
+                        key={plantName}
+                        className={`hydro-live-plant-section is-compact plant-cols-${groupUnits.length}`}
+                      >
+                        <div className="hydro-live-plant-heading">
+                          <h2>PLTA {plantName}</h2>
+                          <span>
+                            {groupUnits.length} unit · <strong>{numberFormat.format(plantMw)} MW</strong>
+                          </span>
+                        </div>
+
+                        <div className="hydro-live-plant-grid is-compact">
+                          {groupUnits.map((u) => {
+                            const vibList = u.readings.filter(isVibrationReading)
+                            const peakVib = unitPeakVibration(u, demoOverride)
+                            const vibStatus = classifyLiveVibration(peakVib, true)
+
+                            const mw = u.readings.find((r) => r.channel === 'Daya Aktif')?.value ?? null
+                            const mvar = u.readings.find((r) => r.channel === 'Daya Reaktif')?.value ?? null
+                            const kv = u.readings.find((r) => r.channel === 'Tegangan')?.value ?? null
+                            const amp = u.readings.find((r) => r.channel === 'Arus')?.value ?? null
+                            const rpm = u.readings.find((r) => r.channel === 'Kecepatan Putaran')?.value ?? null
+                            const gate = u.readings.find((r) => r.channel === 'Bukaan Wicket Gate')?.value ?? null
+                            const tempBear = u.readings.find((r) => r.channel === 'Temperatur Bearing')?.value ?? null
+                            const tempOil = u.readings.find((r) => r.channel === 'Temperatur Oli Bearing')?.value ?? null
+
+                            return (
+                              <article key={u.unit_id} className={`hydro-live-unit-card is-compact tone-${vibStatus.tone}`}>
+                                <div className="hydro-live-unit-card-top">
+                                  <h3 title={`${u.unit_id} · ${u.name}`}>
+                                    {u.unit_id} · {u.name.replace('Unit ', 'U')}
+                                  </h3>
+                                  <span className="hydro-live-vib-badge" data-tone={vibStatus.tone}>
+                                    {vibStatus.label}
+                                  </span>
+                                </div>
+
+                                <LiveVibrationGauge value={peakVib} compact />
+
+                                <div className="hydro-live-vib-channels" aria-label={`Kanal getaran ${u.unit_id}`}>
+                                  {vibList.map((vib) => {
+                                    const chipTone = classifyLiveVibration(vib.value, true).tone
+                                    return (
+                                      <div key={vib.channel} className={`hydro-live-vib-chip tone-${chipTone}`}>
+                                        <span>{vib.channel}</span>
+                                        <strong>{vib.value !== null ? compactNumFormat.format(vib.value) : '—'}</strong>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+
+                                <div className="hydro-live-unit-mini-grid is-compact">
+                                  <div>
+                                    <span>Daya</span>
+                                    <strong>{mw !== null ? `${compactNumFormat.format(mw)} MW` : '—'}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Reaktif</span>
+                                    <strong>{mvar !== null ? `${compactNumFormat.format(mvar)} MVAr` : '—'}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Tegangan</span>
+                                    <strong>{kv !== null ? `${numberFormat.format(kv)} kV` : '—'}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Arus</span>
+                                    <strong>{amp !== null ? `${compactNumFormat.format(amp)} A` : '—'}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Putaran</span>
+                                    <strong>{rpm !== null ? `${compactNumFormat.format(rpm)} rpm` : '—'}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Wicket Gate</span>
+                                    <strong>{gate !== null ? `${compactNumFormat.format(gate)} %` : '—'}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Temp Bearing</span>
+                                    <strong>{tempBear !== null ? `${compactNumFormat.format(tempBear)} °C` : '—'}</strong>
+                                  </div>
+                                  <div>
+                                    <span>Temp Oil Bear</span>
+                                    <strong>{tempOil !== null ? `${compactNumFormat.format(tempOil)} °C` : '—'}</strong>
+                                  </div>
+                                </div>
+
+                                <div className="hydro-live-unit-actions">
+                                  <button
+                                    type="button"
+                                    onClick={() => openLiveUnit(u.unit_id, 'Unit Monitoring')}
+                                  >
+                                    Detail
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="primary"
+                                    onClick={() => openLiveUnit(u.unit_id, 'Vibration Analysis')}
+                                  >
+                                    Tren
+                                  </button>
+                                </div>
+                              </article>
+                            )
+                          })}
+                        </div>
+                      </section>
+                    )
+                  })}
                 </div>
-                <div className="hydro-live-fleet-kpi">
-                  <span>Total Daya Aktif (3 PLTA)</span>
-                  <strong>{numberFormat.format(totalFleetMw)} MW</strong>
-                </div>
-                <div className="hydro-live-fleet-kpi">
-                  <span>Status Getaran Armada</span>
-                  <strong>
-                    {fleetCounts.normal} Normal · {fleetCounts.alert} Alert · {fleetCounts.critical} Kritis
-                  </strong>
-                </div>
-                <div className="hydro-live-fleet-kpi">
-                  <span>Pembaruan</span>
-                  <strong className="hydro-live-pulse-inline">
-                    <span className="hydro-live-pulse-dot" />
-                    Tiap 2 detik
-                  </strong>
-                </div>
-              </section>
 
-              <HydroCascadeMap
-                units={overview.units}
-                hydrology={overview.hydrology}
-                demoOverride={demoOverride}
-                simulated={overview.simulated}
-                onOpenUnit={(id) => openLiveUnit(id, 'Unit Monitoring')}
-              />
-
-              <div className="hydro-live-plants-stack">
-                {plantOrder.map((plantName) => {
-                  const groupUnits = overview.units.filter((u) => u.plant === plantName)
-                  if (groupUnits.length === 0) return null
-                  const plantMw = groupUnits.reduce((sum, u) => {
-                    const mw = u.readings.find((r) => r.channel === 'Daya Aktif')?.value ?? 0
-                    return sum + (mw ?? 0)
-                  }, 0)
-
-                  return (
-                    <section key={plantName} className="hydro-live-plant-section">
-                      <div className="hydro-live-plant-heading">
-                        <h2>PLTA {plantName}</h2>
-                        <span>
-                          {groupUnits.length} unit · Total daya <strong>{numberFormat.format(plantMw)} MW</strong>
-                        </span>
-                      </div>
-
-                      <div className="hydro-live-plant-grid">
-                        {groupUnits.map((u) => {
-                          const vibList = u.readings.filter(isVibrationReading)
-                          const peakVib = unitPeakVibration(u, demoOverride)
-                          const vibStatus = classifyLiveVibration(peakVib)
-
-                          const mw = u.readings.find((r) => r.channel === 'Daya Aktif')?.value ?? null
-                          const mvar = u.readings.find((r) => r.channel === 'Daya Reaktif')?.value ?? null
-                          const kv = u.readings.find((r) => r.channel === 'Tegangan')?.value ?? null
-                          const amp = u.readings.find((r) => r.channel === 'Arus')?.value ?? null
-                          const rpm = u.readings.find((r) => r.channel === 'Kecepatan Putaran')?.value ?? null
-                          const gate = u.readings.find((r) => r.channel === 'Bukaan Wicket Gate')?.value ?? null
-                          const temp = u.readings.find((r) => r.channel === 'Temperatur Bearing')?.value ?? null
-
-                          return (
-                            <article key={u.unit_id} className="hydro-live-unit-card">
-                              <div className="hydro-live-unit-card-top">
-                                <div>
-                                  <small>PLTA {u.plant}</small>
-                                  <h3>{u.unit_id} · {u.name}</h3>
-                                </div>
-                                <span className="hydro-live-vib-badge" data-tone={vibStatus.tone}>
-                                  {vibStatus.label}
-                                </span>
-                              </div>
-
-                              <LiveVibrationGauge value={peakVib} channelCount={vibList.length} />
-
-                              <div className="hydro-live-unit-mini-grid">
-                                <div>
-                                  <span>Daya</span>
-                                  <strong>{mw !== null ? `${numberFormat.format(mw)} MW` : '—'}</strong>
-                                </div>
-                                <div>
-                                  <span>Reaktif</span>
-                                  <strong>{mvar !== null ? `${numberFormat.format(mvar)} MVAr` : '—'}</strong>
-                                </div>
-                                <div>
-                                  <span>Tegangan</span>
-                                  <strong>{kv !== null ? `${numberFormat.format(kv)} kV` : '—'}</strong>
-                                </div>
-                                <div>
-                                  <span>Arus</span>
-                                  <strong>{amp !== null ? `${numberFormat.format(amp)} A` : '—'}</strong>
-                                </div>
-                                <div>
-                                  <span>Putaran</span>
-                                  <strong>{rpm !== null ? `${numberFormat.format(rpm)} rpm` : '—'}</strong>
-                                </div>
-                                <div>
-                                  <span>Gate / Suhu</span>
-                                  <strong>
-                                    {gate !== null ? `${numberFormat.format(gate)}%` : '—'} · {temp !== null ? `${numberFormat.format(temp)}°C` : '—'}
-                                  </strong>
-                                </div>
-                              </div>
-
-                              <div className="hydro-live-unit-actions">
-                                <button
-                                  type="button"
-                                  onClick={() => openLiveUnit(u.unit_id, 'Unit Monitoring')}
-                                >
-                                  Detail Unit
-                                </button>
-                                <button
-                                  type="button"
-                                  className="primary"
-                                  onClick={() => openLiveUnit(u.unit_id, 'Vibration Analysis')}
-                                >
-                                  Tren Getaran
-                                </button>
-                              </div>
-                            </article>
-                          )
-                        })}
-                      </div>
-                    </section>
-                  )
-                })}
+                <HydroCascadeMap
+                  units={overview.units}
+                  hydrology={overview.hydrology}
+                  demoOverride={demoOverride}
+                  simulated={overview.simulated}
+                  onOpenUnit={(id) => openLiveUnit(id, 'Unit Monitoring')}
+                />
               </div>
-            </>
+
+              <div className="hydro-overview-main-right">
+                <LiveAlertDemo
+                  units={units}
+                  compact
+                  onDemoReadingChange={setDemoOverride}
+                />
+              </div>
+            </div>
           )}
-          <LiveAlertDemo onDemoReadingChange={setDemoOverride} />
         </>
       ) : (
         <>
@@ -1382,7 +1340,7 @@ export default function LiveMonitoring({
             />
           )}
 
-          {isAlarms && <LiveAlertDemo />}
+          {isAlarms && <LiveAlertDemo units={units} />}
 
           {!isAlarms && !isVibrationAnalysis && snapshot.readings.length > 0 && (
             <div className="hydro-live-cards">
@@ -1410,7 +1368,7 @@ export default function LiveMonitoring({
             </div>
           )}
 
-          {isVibrationAnalysis && <LiveAlertDemo />}
+          {isVibrationAnalysis && <LiveAlertDemo units={units} />}
         </>
       )}
     </main>

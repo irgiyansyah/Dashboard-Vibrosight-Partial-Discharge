@@ -1,716 +1,662 @@
-.dashboard .main-layout > [hidden] {
-  display: none;
-}
-
-.hydro-mode-bar {
+/* =========================================================
+   TOP BAR: MODE PEMANTAUAN (KANAN & MODERN)
+   ========================================================= */
+.hydro-mode-bar,
+.hydro-mode-switcher,
+.hydro-live-mode-bar,
+.hydro-view-mode-bar,
+.mode-switch-bar,
+.monitoring-mode-bar,
+.view-mode-bar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 24px;
-  border-bottom: 1px solid #d8e3eb;
-  background: #fff;
-  color: #143653;
-  font-size: .86rem;
-  font-weight: 600;
-}
-
-.hydro-mode-switch {
-  display: inline-flex;
-  padding: 3px;
-  border: 1px solid #d8e3eb;
-  border-radius: 8px;
-  background: #eff5f8;
-}
-
-.hydro-mode-switch button {
-  min-height: 36px;
   padding: 6px 14px;
-  border: 0;
-  border-radius: 5px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.hydro-mode-label,
+.hydro-mode-bar-label,
+.hydro-live-mode-label,
+.hydro-view-mode-label,
+.mode-switch-label,
+.monitoring-mode-label,
+.view-mode-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.hydro-mode-switch,
+.hydro-mode-toggle,
+.hydro-mode-tabs,
+.hydro-mode-segmented,
+.hydro-live-mode-switch,
+.hydro-live-mode-toggle,
+.hydro-view-mode-switch,
+.mode-switch-group,
+.monitoring-mode-toggle,
+.view-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.hydro-mode-bar button,
+.hydro-mode-switcher button,
+.hydro-live-mode-bar button,
+.hydro-view-mode-bar button,
+.mode-switch-bar button,
+.monitoring-mode-bar button,
+.view-mode-bar button,
+.hydro-mode-switch button,
+.hydro-mode-toggle button,
+.hydro-mode-tabs button,
+.hydro-mode-segmented button {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  outline: none;
   background: transparent;
-  color: #244862;
-  font: inherit;
+  color: #475569;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+  white-space: nowrap;
+  line-height: 1.1;
 }
 
-.hydro-mode-switch button[aria-pressed="true"] {
-  background: #143653;
-  color: #fff;
+.hydro-mode-bar button:hover,
+.hydro-mode-switcher button:hover,
+.hydro-live-mode-bar button:hover,
+.hydro-mode-switch button:hover,
+.hydro-mode-toggle button:hover {
+  color: #0f2942;
+  background: rgba(15, 41, 66, 0.07);
 }
 
-.dashboard .hydro-live {
-  min-width: 0;
-  padding: clamp(16px, 3vw, 32px);
-  color: #143653;
+.hydro-mode-bar button.is-active,
+.hydro-mode-bar button.active,
+.hydro-mode-bar button[aria-pressed='true'],
+.hydro-mode-bar button[aria-selected='true'],
+.hydro-mode-switcher button.is-active,
+.hydro-mode-switcher button.active,
+.hydro-mode-switcher button[aria-pressed='true'],
+.hydro-live-mode-bar button.is-active,
+.hydro-live-mode-bar button.active,
+.hydro-live-mode-bar button[aria-pressed='true'],
+.hydro-mode-switch button.is-active,
+.hydro-mode-switch button.active,
+.hydro-mode-switch button[aria-pressed='true'],
+.hydro-mode-toggle button.is-active,
+.hydro-mode-toggle button.active,
+.hydro-mode-toggle button[aria-pressed='true'] {
+  background: #0f2942;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(15, 41, 66, 0.28);
 }
 
+/* =========================================================
+   BASE LIVE CONTAINER
+   ========================================================= */
+.hydro-live {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px 24px;
+  color: #0f172a;
+  box-sizing: border-box;
+}
+
+.hydro-live *,
+.hydro-live *::before,
+.hydro-live *::after {
+  box-sizing: border-box;
+}
+
+/* 1-SCREEN LOCK UNTUK OVERVIEW DI DESKTOP / ZOOM 80% */
+@media (min-width: 1181px) {
+  .hydro-live.is-overview-compact {
+    height: calc(100vh - 54px);
+    max-height: calc(100vh - 54px);
+    overflow: hidden;
+    gap: 8px;
+    padding: 6px 10px 8px;
+  }
+}
+
+/* Header standar (Unit Monitoring, Vibration Analysis, Alarms, PD) */
 .hydro-live-header {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .hydro-live-header h1 {
   margin: 0;
-  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f2942;
 }
 
 .hydro-live-header p {
-  margin: 5px 0 0;
-  color: #526980;
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+/* Header + KPI 1 baris untuk Overview */
+.hydro-overview-top-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.hydro-overview-title-block h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: #0f2942;
+  line-height: 1.15;
+}
+
+.hydro-overview-title-block p {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.15;
+}
+
+.hydro-kpi-inline-strip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.hydro-kpi-mini {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 4px 11px;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.hydro-kpi-mini span {
+  font-size: 9.5px;
+  color: #64748b;
+}
+
+.hydro-kpi-mini strong {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #0f172a;
 }
 
 .hydro-live-status {
-  padding: 7px 11px;
-  border-radius: 7px;
-  background: #e9f0f5;
-  color: #21455f;
-  font-size: .86rem;
-  font-weight: 600;
-}
-
-.hydro-live-status[data-status="live"] {
-  background: #deefe5;
-  color: #154e31;
-}
-
-.hydro-live-status:is([data-status="stale"], [data-status="quality_issue"], [data-status="api_error"], [data-status="unavailable"]) {
-  background: #fff0d5;
-  color: #65410a;
-}
-
-.hydro-live-filters,
-.hydro-live-cards {
-  display: grid;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.hydro-live-filters {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
-  max-width: 460px;
-}
-
-.hydro-live-filters label {
-  display: grid;
-  gap: 6px;
-  font-weight: 600;
-}
-
-.hydro-live-filters select {
-  min-height: 40px;
-  width: 100%;
-  padding: 7px 10px;
-  border: 1px solid #c7d7e3;
-  border-radius: 7px;
-  background: white;
-  color: inherit;
-}
-
-.hydro-live-cards {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
-}
-
-.hydro-live-cards article {
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid #d8e3eb;
-  border-radius: 9px;
-  background: white;
-  overflow-wrap: anywhere;
-}
-
-.hydro-live-cards h2 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.hydro-live-value {
-  margin-top: 10px;
-  font-size: 1.65rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.hydro-live-value span {
-  font-size: .88rem;
-}
-
-.hydro-live-cards dl {
-  display: grid;
-  gap: 5px;
-  margin: 9px 0 0;
-}
-
-.hydro-live-cards dl div {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 4px 8px;
-  font-size: .84rem;
-}
-
-.hydro-live-cards dt {
-  color: #526980;
-}
-
-.hydro-live-cards dd {
-  margin: 0;
-}
-
-.hydro-live-notifications {
-  margin-top: 20px;
-  padding: clamp(14px, 2vw, 20px);
-  border: 1px solid #d8e3eb;
-  border-radius: 10px;
-  background: #fff;
-}
-
-.hydro-live-notifications-header,
-.hydro-live-notifications-summary,
-.hydro-live-events li {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px 16px;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  white-space: nowrap;
 }
 
-.hydro-live-notifications h2,
-.hydro-live-events h3 {
-  margin: 0;
-  font-size: 1rem;
+.hydro-live-status[data-status='api_error'],
+.hydro-live-status[data-status='unavailable'] {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
 }
 
-.hydro-live-notifications p {
-  margin: 5px 0 0;
-  color: #526980;
-  font-size: .86rem;
+.hydro-live-status[data-status='not_configured'],
+.hydro-live-status[data-status='loading'] {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.hydro-live-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  display: inline-block;
+  animation: hydroBlink 1.6s infinite ease-in-out;
+}
+
+@keyframes hydroBlink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
 }
 
 .hydro-live-demo-label {
   display: inline-block;
-  margin-right: 6px;
-  padding: 2px 7px;
-  border-radius: 5px;
-  background: #eef3f7;
-  color: #294b65;
+  background: #e0f2fe;
+  color: #0369a1;
   font-weight: 700;
+  font-size: 9.5px;
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  margin-right: 5px;
 }
 
-.hydro-live-notifications button {
-  min-height: 36px;
-  padding: 6px 11px;
-  border: 1px solid #bccedb;
-  border-radius: 7px;
-  background: #fff;
-  color: #143653;
-  font: inherit;
-  font-size: .86rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.hydro-live-notifications-header button {
-  border-color: #143653;
-  background: #143653;
-  color: #fff;
-}
-
-.hydro-live-notifications button:disabled {
-  opacity: .68;
-  cursor: default;
-}
-
-.hydro-live-notifications button:focus-visible {
-  outline: 2px solid #28689b;
-  outline-offset: 3px;
-}
-
-.hydro-live-notifications-summary {
-  margin-top: 13px;
-  padding-top: 12px;
-  border-top: 1px solid #e4edf3;
-  font-size: .86rem;
-}
-
-.hydro-live-events {
+/* =========================================================
+   OVERVIEW BODY SPLIT: KIRI (JARUM + KASKADE) | KANAN (NOTIF PENUH)
+   ========================================================= */
+.hydro-overview-body-split {
   display: grid;
-  gap: 7px;
-  margin: 13px 0 0;
-  padding: 0;
-  list-style: none;
+  grid-template-columns: minmax(0, 1fr) 315px;
+  gap: 10px;
+  flex: 1 1 0;
+  min-height: 0;
 }
 
-.hydro-live-events li {
-  padding: 10px 12px;
-  border-inline-start: 3px solid #bf830a;
-  border-radius: 6px;
-  background: #fff7e7;
-  color: #65410a;
-  overflow-wrap: anywhere;
-}
-
-.hydro-live-events li[data-level="trip"] {
-  border-inline-start-color: #b6223c;
-  background: #fdf0f1;
-  color: #8c1b31;
-}
-
-.hydro-live-alert-viewed {
-  color: #385265;
-  font-size: .86rem;
-  font-weight: 600;
-}
-
-.hydro-live-notifications .hydro-live-notifications-error {
-  color: #8c1b31;
-}
-
-@media (max-width: 480px) {
-  .hydro-mode-bar {
-    padding: 10px 16px;
-  }
-}
-.hydro-live-event-body {
-  min-width: 0;
-  flex: 1 1 240px;
-}
-
-.hydro-live-event-details {
-  margin-top: 8px;
-  font-size: .82rem;
-}
-
-.hydro-live-event-details summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: inherit;
-}
-
-.hydro-live-event-details dl {
-  display: grid;
-  gap: 4px;
-  margin: 6px 0 0;
-  padding-top: 6px;
-  border-top: 1px solid rgba(20, 54, 83, 0.14);
-}
-
-.hydro-live-event-details dl div {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 4px 12px;
-}
-
-.hydro-live-event-details dt {
-  color: #526980;
-}
-
-.hydro-live-event-details dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.hydro-live-event-details code {
-  font-size: .78rem;
-  word-break: break-all;
-}
-
-.hydro-live-pagination {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 12px;
-}
-.hydro-live-chart-panel,
-.hydro-live-pd-empty {
-  margin-top: 18px;
-  padding: clamp(14px, 2vw, 20px);
-  border: 1px solid #d8e3eb;
-  border-radius: 10px;
-  background: #fff;
-}
-
-.hydro-live-chart-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px 16px;
-}
-
-.hydro-live-chart-header h2,
-.hydro-live-pd-empty h2 {
-  margin: 0;
-  font-size: 1.02rem;
-}
-
-.hydro-live-chart-header p,
-.hydro-live-pd-empty p {
-  margin: 5px 0 0;
-  color: #526980;
-  font-size: .86rem;
-}
-
-.hydro-live-chart-badges {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.hydro-live-pulse-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: #e6f6fc;
-  color: #0e5a78;
-  font-size: .8rem;
-  font-weight: 700;
-}
-
-.hydro-live-pulse-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #0ea5e9;
-  animation: hydro-live-pulse 1.4s infinite;
-}
-
-@keyframes hydro-live-pulse {
-  0% { opacity: 1; transform: scale(1); }
-  50% { opacity: .35; transform: scale(1.35); }
-  100% { opacity: 1; transform: scale(1); }
-}
-
-.hydro-live-vib-badge {
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: .8rem;
-  font-weight: 700;
-  background: #e9f0f5;
-  color: #21455f;
-}
-
-.hydro-live-vib-badge[data-tone="normal"] {
-  background: #deefe5;
-  color: #154e31;
-}
-
-.hydro-live-vib-badge[data-tone="fail"] {
-  background: #f3e8ff;
-  color: #6b21a8;
-}
-
-.hydro-live-vib-badge[data-tone="alert"] {
-  background: #fff0d5;
-  color: #854d0e;
-}
-
-.hydro-live-vib-badge[data-tone="trip"] {
-  background: #fdf0f1;
-  color: #9f1239;
-}
-
-.hydro-live-chart-wrap {
-  margin-top: 14px;
-  width: 100%;
-  min-height: 300px;
-}
-
-.hydro-live-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-  gap: 14px;
-  margin-top: 18px;
-}
-
-.hydro-live-unit-card {
+.hydro-overview-main-left {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid #d8e3eb;
-  border-radius: 10px;
-  background: #fff;
-}
-
-.hydro-live-unit-card-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
   gap: 8px;
+  min-height: 0;
+  min-width: 0;
 }
 
-.hydro-live-unit-card-top small {
-  color: #526980;
-  font-weight: 600;
+.hydro-overview-main-right {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-.hydro-live-unit-card-top h2 {
-  margin: 2px 0 0;
-  font-size: 1rem;
-}
-
-.hydro-live-unit-metrics {
+/* =========================================================
+   3 PLTA GAUGE CARDS (DI KOLOM KIRI)
+   ========================================================= */
+.hydro-live-plants-row {
   display: grid;
+  grid-template-columns: 3fr 2fr 2fr;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.hydro-live-plant-section.is-compact {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  padding: 7px 8px 8px;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
-  font-size: .86rem;
-}
-
-.hydro-live-unit-metrics div {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  color: #526980;
-}
-
-.hydro-live-unit-metrics strong {
-  color: #143653;
-  font-variant-numeric: tabular-nums;
-}
-
-.hydro-live-unit-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: auto;
-}
-
-.hydro-live-unit-actions button {
-  flex: 1;
-  min-height: 36px;
-  padding: 6px 10px;
-  border: 1px solid #bccedb;
-  border-radius: 7px;
-  background: #fff;
-  color: #143653;
-  font: inherit;
-  font-size: .84rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.hydro-live-unit-actions button.primary {
-  border-color: #143653;
-  background: #143653;
-  color: #fff;
-}
-.hydro-live-fleet-bar {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.hydro-live-fleet-kpi {
-  padding: 12px 14px;
-  border: 1px solid #d8e3eb;
-  border-radius: 10px;
-  background: #fff;
-  display: grid;
-  gap: 4px;
-}
-
-.hydro-live-fleet-kpi span {
-  font-size: .78rem;
-  color: #526980;
-  font-weight: 600;
-}
-
-.hydro-live-fleet-kpi strong {
-  font-size: 1rem;
-  color: #143653;
-  font-variant-numeric: tabular-nums;
-}
-
-.hydro-live-pulse-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.hydro-live-plants-stack {
-  display: grid;
-  gap: 18px;
-  margin-top: 18px;
-}
-
-.hydro-live-plant-section {
-  padding: 16px;
-  border: 1px solid #d8e3eb;
-  border-radius: 12px;
-  background: #f8fbfd;
+  min-width: 0;
 }
 
 .hydro-live-plant-heading {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 4px;
+  padding: 0 2px;
 }
 
 .hydro-live-plant-heading h2 {
   margin: 0;
-  font-size: 1.08rem;
-  color: #143653;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #0f2942;
 }
 
 .hydro-live-plant-heading span {
-  font-size: .85rem;
-  color: #526980;
+  font-size: 10.5px;
+  color: #475569;
+  white-space: nowrap;
 }
 
-.hydro-live-plant-grid {
+.hydro-live-plant-grid.is-compact {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 285px), 1fr));
-  gap: 14px;
+  gap: 6px;
+}
+
+.plant-cols-3 .hydro-live-plant-grid.is-compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.plant-cols-2 .hydro-live-plant-grid.is-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hydro-live-unit-card.is-compact {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 7px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.hydro-live-unit-card.is-compact.tone-trip {
+  border-color: #fca5a5;
+  background: #fffafb;
+}
+
+.hydro-live-unit-card.is-compact.tone-alert {
+  border-color: #fcd34d;
+  background: #fffdf5;
+}
+
+.hydro-live-unit-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 20px;
 }
 
 .hydro-live-unit-card-top h3 {
-  margin: 2px 0 0;
-  font-size: 1rem;
-  color: #143653;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+.hydro-live-vib-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.15;
+}
+
+.hydro-live-vib-badge[data-tone='normal'] {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.hydro-live-vib-badge[data-tone='alert'] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.hydro-live-vib-badge[data-tone='trip'] {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.hydro-live-vib-badge[data-tone='fail'] {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.hydro-live-vib-badge[data-tone='neutral'] {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Gauge Besar & Jarum Bergerak Halus */
 .hydro-live-gauge {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 2px 0 4px;
 }
 
-.hydro-live-gauge svg {
+.hydro-live-gauge.is-compact svg {
   width: 100%;
-  max-width: 220px;
-  height: auto;
-  overflow: visible;
+  max-width: 132px;
+  height: 74px;
 }
 
 .hydro-live-gauge-needle {
-  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .hydro-live-gauge-readout {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: -6px;
+  align-items: baseline;
+  gap: 3px;
+  margin-top: -2px;
 }
 
 .hydro-live-gauge-readout strong {
-  font-size: 1.35rem;
-  color: #143653;
-  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f2942;
 }
 
 .hydro-live-gauge-readout span {
-  font-size: .78rem;
-  color: #526980;
+  font-size: 9.5px;
+  color: #64748b;
 }
 
-.hydro-live-unit-mini-grid {
+/* Kanal Getaran */
+.hydro-live-vib-channels {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 10px;
-  padding: 10px;
-  border-radius: 8px;
-  background: #f4f8fb;
-  font-size: .8rem;
+  gap: 3px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 6px;
 }
 
-.hydro-live-unit-mini-grid div {
+.hydro-live-vib-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 3px 4px;
+  font-size: 9.5px;
+  line-height: 1.1;
+}
+
+.hydro-live-vib-chip span {
+  color: #475569;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hydro-live-vib-chip strong {
+  color: #0369a1;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hydro-live-vib-chip.tone-alert {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.hydro-live-vib-chip.tone-alert strong {
+  color: #b45309;
+}
+
+.hydro-live-vib-chip.tone-trip {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.hydro-live-vib-chip.tone-trip strong {
+  color: #b91c1c;
+}
+
+.hydro-live-vib-chip.tone-fail {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+}
+
+.hydro-live-vib-chip.tone-fail strong {
+  color: #6d28d9;
+}
+
+/* 8 Metrik Operasi & Suhu Terpisah */
+.hydro-live-unit-mini-grid.is-compact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 6px;
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 6px;
+  padding: 5px 6px;
+}
+
+.hydro-live-unit-mini-grid.is-compact > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  line-height: 1.15;
+  min-width: 0;
 }
 
-.hydro-live-unit-mini-grid span {
-  color: #526980;
-  font-size: .74rem;
+.hydro-live-unit-mini-grid.is-compact span {
+  font-size: 9px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.hydro-live-unit-mini-grid strong {
-  color: #143653;
-  font-variant-numeric: tabular-nums;
+.hydro-live-unit-mini-grid.is-compact strong {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
 }
-.hydro-cascade-card {
-  margin-top: 18px;
-  padding: clamp(14px, 2vw, 20px);
-  border: 1px solid #d8e3eb;
-  border-radius: 12px;
-  background: #fff;
+
+.hydro-live-unit-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: auto;
+}
+
+.hydro-live-unit-actions button {
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 5px 6px;
+  cursor: pointer;
+  background: #ffffff;
+  color: #0f2942;
+  border: 1px solid #cbd5e1;
+  white-space: nowrap;
+}
+
+.hydro-live-unit-actions button.primary {
+  background: #0f2942;
+  color: #ffffff;
+  border-color: #0f2942;
+}
+
+/* =========================================================
+   SKEMA KASKADE PLTA (DI BAWAH JARUM KOLOM KIRI)
+   ========================================================= */
+.hydro-cascade-card.is-compact {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .hydro-cascade-header {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px 16px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .hydro-cascade-header h2 {
   margin: 0;
-  font-size: 1.05rem;
-  color: #143653;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #0f2942;
 }
 
 .hydro-cascade-header p {
-  margin: 4px 0 0;
-  color: #526980;
-  font-size: .84rem;
+  margin: 1px 0 0;
+  font-size: 10px;
+  color: #64748b;
 }
 
 .hydro-cascade-legend {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  font-size: .8rem;
-  font-weight: 600;
-  color: #334e68;
+  align-items: center;
+  gap: 12px;
+  font-size: 10.5px;
+  color: #334155;
+  flex-shrink: 0;
 }
 
 .hydro-cascade-legend span {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
 .hydro-cascade-legend i {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
+  display: inline-block;
 }
 
 .hydro-cascade-svg-wrap {
-  margin-top: 12px;
+  flex: 1 1 0;
+  min-height: 0;
   width: 100%;
-  overflow-x: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .hydro-cascade-svg-wrap svg {
-  display: block;
   width: 100%;
-  min-width: 720px;
-  height: auto;
+  height: 100%;
+  max-height: 100%;
+  display: block;
 }
 
 .hydro-cascade-flow {
-  animation: hydro-water-flow 1.4s linear infinite;
+  animation: hydroFlow 1.6s linear infinite;
 }
 
-@keyframes hydro-water-flow {
-  from { stroke-dashoffset: 22; }
+@keyframes hydroFlow {
+  from { stroke-dashoffset: 44; }
   to { stroke-dashoffset: 0; }
 }
 
@@ -718,223 +664,468 @@
   cursor: pointer;
 }
 
-.hydro-cascade-unit:hover circle:nth-last-of-type(1) {
-  filter: brightness(1.08);
+.hydro-cascade-halo {
+  animation: hydroPulse 1.4s ease-in-out infinite;
 }
 
-.hydro-cascade-unit.is-alert .hydro-cascade-halo {
-  animation: hydro-alarm-blink 1.2s ease-in-out infinite;
-}
-
-.hydro-cascade-unit.is-trip .hydro-cascade-halo {
-  animation: hydro-alarm-blink 0.65s ease-in-out infinite;
-}
-
-@keyframes hydro-alarm-blink {
+@keyframes hydroPulse {
   0%, 100% { opacity: 0.15; }
-  50% { opacity: 0.65; }
-}
-.hydro-scada-top-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  gap: 12px;
-  margin-top: 14px;
+  50% { opacity: 0.55; }
 }
 
-.hydro-hydrology-box,
-.hydro-ops-table-card {
-  padding: 12px;
-  border: 1px solid #d8e3eb;
-  border-radius: 10px;
-  background: #f8fbfd;
+/* =========================================================
+   NOTIFIKASI GETARAN (PANJANG PENUH ATAS-BAWAH DI KOLOM KANAN)
+   ========================================================= */
+.hydro-live-notifications {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-width: 0;
+  gap: 10px;
 }
 
-.hydro-ops-table-title {
+.hydro-live-notifications.is-compact-sidebar {
+  border-radius: 11px;
+  padding: 10px 11px;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hydro-live-notifications-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  font-size: .84rem;
-  color: #143653;
-  border-bottom: 1px solid #dce7f0;
-  padding-bottom: 6px;
+  flex-shrink: 0;
 }
 
-.hydro-ops-table-title span {
-  font-size: .78rem;
-  color: #526980;
-}
-
-.hydro-ops-table-title b {
-  color: #0284c7;
-}
-
-.hydro-hydrology-list {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  font-size: .78rem;
-}
-
-.hydro-hydrology-list div {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.hydro-hydrology-list dt {
-  color: #526980;
-}
-
-.hydro-hydrology-list dd {
-  margin: 0;
-  font-weight: 700;
-  color: #0369a1;
-  font-variant-numeric: tabular-nums;
-}
-
-.hydro-petea-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding-top: 6px;
-  border-top: 1px dashed #d5e2ec;
-  font-size: .78rem;
-  font-weight: 600;
-  color: #334e68;
-}
-
-.hydro-petea-gates {
-  display: inline-flex;
-  gap: 4px;
-}
-
-.hydro-gate-box {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: .72rem;
-  font-weight: 700;
-  color: #fff;
-}
-
-.hydro-gate-box.is-open {
-  background: #16a34a;
-}
-
-.hydro-gate-box.is-closed {
-  background: #dc2626;
-}
-
-.hydro-spg-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.hydro-live-notifications.is-compact-sidebar .hydro-live-notifications-header {
+  flex-direction: column;
   gap: 6px;
-  padding-top: 4px;
 }
 
-.hydro-spg-item {
-  padding: 5px 6px;
-  border: 1px solid #d8e3eb;
-  border-radius: 6px;
-  background: #fff;
-  text-align: center;
-  display: grid;
-  gap: 1px;
+.hydro-live-notifications-header h2 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0f2942;
 }
 
-.hydro-spg-item span {
-  font-size: .68rem;
+.hydro-live-notifications-header p {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  color: #475569;
+  line-height: 1.3;
+}
+
+.hydro-live-notifications-header button {
+  background: #0f2942;
+  color: #ffffff;
+  border: none;
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 11px;
   font-weight: 700;
-  color: #526980;
-}
-
-.hydro-spg-item strong {
-  font-size: .78rem;
-  color: #0369a1;
-  font-variant-numeric: tabular-nums;
-}
-
-.hydro-spg-item small {
-  font-size: .66rem;
-  color: #64748b;
-  font-variant-numeric: tabular-nums;
-}
-
-.hydro-ops-table-scroll {
-  overflow-x: auto;
-}
-
-.hydro-ops-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: .76rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.hydro-ops-table th,
-.hydro-ops-table td {
-  padding: 4px 5px;
-  border-bottom: 1px solid #e4edf3;
-  text-align: right;
+  cursor: pointer;
   white-space: nowrap;
 }
 
-.hydro-ops-table th:first-child,
-.hydro-ops-table td:first-child {
-  text-align: left;
-  color: #526980;
-  font-weight: 600;
+.hydro-live-notifications-header button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.hydro-ops-table td {
-  color: #143653;
-  font-weight: 600;
+.hydro-live-notifications-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+  color: #475569;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
 }
 
-.hydro-ops-table .unit-col {
-  color: #64748b;
-  font-weight: 500;
-  font-size: .7rem;
+.hydro-live-notifications-error {
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 11px;
 }
 
-.hydro-ops-unit-pill {
-  padding: 2px 6px;
-  border: 0;
-  border-radius: 4px;
-  font: inherit;
-  font-size: .7rem;
+.hydro-live-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.hydro-live-notifications.is-compact-sidebar .hydro-live-events {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.hydro-live-events li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  border-left: 3.5px solid #94a3b8;
+  background: #f8fafc;
+}
+
+.hydro-live-events li[data-level='trip'] {
+  background: #fef2f2;
+  border-color: #fecaca;
+  border-left-color: #dc2626;
+}
+
+.hydro-live-events li[data-level='alert'] {
+  background: #fffbeb;
+  border-color: #fde68a;
+  border-left-color: #d97706;
+}
+
+.hydro-live-event-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.hydro-live-event-body h3 {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #991b1b;
+}
+
+.hydro-live-events li[data-level='alert'] .hydro-live-event-body h3 {
+  color: #92400e;
+}
+
+.hydro-live-event-body p {
+  margin: 1px 0;
+  font-size: 10px;
+  color: #334155;
+  line-height: 1.3;
+}
+
+.hydro-live-event-origin {
   font-weight: 700;
-  cursor: pointer;
-  color: #fff;
-  background: #143653;
+  color: #0f172a !important;
 }
 
-.hydro-ops-unit-pill.tone-normal { background: #16a34a; }
-.hydro-ops-unit-pill.tone-alert { background: #d97706; }
-.hydro-ops-unit-pill.tone-trip { background: #dc2626; }
-.hydro-ops-unit-pill.tone-fail { background: #7c3aed; }
+.hydro-live-event-details {
+  margin-top: 4px;
+  font-size: 10px;
+}
 
-.hydro-ops-outflow {
-  margin-top: auto;
+.hydro-live-event-details summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #0f2942;
+}
+
+.hydro-live-event-details dl {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
+  display: grid;
+  gap: 3px;
+}
+
+.hydro-live-event-details dl > div {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding-top: 6px;
-  border-top: 1px dashed #d5e2ec;
-  font-size: .78rem;
-  color: #526980;
+  gap: 8px;
 }
 
-.hydro-ops-outflow strong {
-  color: #0369a1;
-  font-variant-numeric: tabular-nums;
+.hydro-live-event-details dt {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.hydro-live-event-details dd {
+  margin: 0;
+  color: #0f172a;
+  text-align: right;
+}
+
+.hydro-live-events li > button {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #0f2942;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hydro-live-alert-viewed {
+  font-size: 9.5px;
+  color: #64748b;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.hydro-live-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 4px;
+  flex-shrink: 0;
+}
+
+.hydro-live-pagination button {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #0f2942;
+  cursor: pointer;
+}
+
+.hydro-live-pagination button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   UNIT MONITORING, VIBRATION ANALYSIS & PARTIAL DISCHARGE
+   ========================================================= */
+.hydro-live-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hydro-live-filters label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.hydro-live-filters select {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.hydro-live-chart-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hydro-live-chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hydro-live-chart-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f2942;
+}
+
+.hydro-live-chart-header p {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+.hydro-live-chart-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hydro-live-pulse-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hydro-live-chart-wrap {
+  width: 100%;
+  min-height: 320px;
+}
+
+.hydro-live-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.hydro-live-cards article {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hydro-live-cards h2 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.hydro-live-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f2942;
+}
+
+.hydro-live-value span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.hydro-live-cards dl {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.hydro-live-cards dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hydro-live-cards dt {
+  color: #64748b;
+}
+
+.hydro-live-cards dd {
+  margin: 0;
+  color: #0f172a;
+  font-weight: 600;
+  text-align: right;
+}
+
+.hydro-live-pd-empty {
+  background: #ffffff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 28px 24px;
+  text-align: center;
+  max-width: 640px;
+}
+
+.hydro-live-pd-empty h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #0f2942;
+}
+
+.hydro-live-pd-empty p {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+@media (max-width: 1180px) {
+  .hydro-overview-body-split,
+  .hydro-live-plants-row {
+    grid-template-columns: 1fr;
+  }
+}
+.hydro-live-notifications-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.hydro-live-notif-select {
+  flex: 1 1 0;
+  min-width: 0;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.hydro-live-events-empty {
+  margin: 0;
+  padding: 14px 10px;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 10.5px;
+  text-align: center;
+}
+/* Sejajarkan tinggi kartu, kotak metrik, dan tombol Detail/Tren di 3 PLTA */
+.hydro-live-plant-grid.is-compact {
+  flex: 1 1 auto;
+  align-items: stretch;
+}
+
+.hydro-live-unit-card.is-compact {
+  height: 100%;
+}
+
+.hydro-live-vib-channels {
+  flex: 1 1 auto;
+  align-content: start;
 }

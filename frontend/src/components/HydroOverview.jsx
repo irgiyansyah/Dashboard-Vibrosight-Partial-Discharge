@@ -1537,7 +1537,7 @@ export default function HydroOverview({
 
         <div className="ho-header-actions">
           <span className="ho-historical">
-            <span /> HISTORIS · BUKAN LIVE
+            <span /> HISTORICAL DATA
           </span>
 
           <button

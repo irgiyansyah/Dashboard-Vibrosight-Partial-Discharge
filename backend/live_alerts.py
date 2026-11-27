@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import random
 from contextlib import asynccontextmanager, suppress
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -20,8 +21,8 @@ router = APIRouter(prefix="/api/live/alerts/demo", tags=["Live alert demo"])
 logger = logging.getLogger("uvicorn.error")
 
 SOURCE = "simulation"
-UNIT_ID = "LRN-02"
-CHANNEL = "Getaran X"
+DEFAULT_UNIT_ID = "LRN-02"
+DEFAULT_CHANNEL = "UGB X"
 ENGINEERING_UNIT = "µm p-p"
 DEMO_VALUES = (240, 260, 280, 355, 365)
 DEMO_INTERVAL_SECONDS = 2.5
@@ -31,6 +32,17 @@ TRIP_THRESHOLD = 350
 MAX_AGE_SECONDS = 90
 PAGE_SIZE = 20
 
+ALL_UNIT_CHANNELS: dict[str, tuple[str, ...]] = {
+    "LRN-01": ("LGB X", "LGB Y", "TGB X", "TGB Y", "UGB X", "UGB Y"),
+    "LRN-02": ("LGB X", "LGB Y", "TGB X", "TGB Y", "UGB X", "UGB Y"),
+    "LRN-03": ("LGB X", "LGB Y", "TGB X", "TGB Y", "UGB X", "UGB Y"),
+    "BLB-01": ("G X", "G Y"),
+    "BLB-02": ("G X", "G Y"),
+    "KRB-01": ("G X", "G Y", "T X", "T Y"),
+    "KRB-02": ("G X", "G Y", "T X", "T Y"),
+}
+UNIT_ROTATION = tuple(ALL_UNIT_CHANNELS.keys())
+
 Level = Literal["alert", "trip"]
 DB_ERRORS = (pymysql.MySQLError, KeyError, ValueError, OSError)
 
@@ -39,6 +51,8 @@ DB_ERRORS = (pymysql.MySQLError, KeyError, ValueError, OSError)
 class DemoReading:
     value: float
     measured_at: datetime
+    unit_id: str = DEFAULT_UNIT_ID
+    channel: str = DEFAULT_CHANNEL
     unit: str = ENGINEERING_UNIT
     quality: str = "good"
 
@@ -46,6 +60,8 @@ class DemoReading:
 @dataclass
 class ActiveAlert:
     id: str
+    unit_id: str
+    channel: str
     level: Level
     threshold: int
     first_value: float
@@ -76,6 +92,17 @@ def _parse_before(before: str | None) -> int | None:
     return int(raw)
 
 
+def _normalize_unit_filter(unit_id: str | None) -> str | None:
+    if unit_id is None:
+        return None
+    cleaned = unit_id.strip().upper()
+    if cleaned == "" or cleaned == "ALL":
+        return None
+    if cleaned not in ALL_UNIT_CHANNELS:
+        raise HTTPException(422, f"Unit '{unit_id}' tidak dikenali.")
+    return cleaned
+
+
 class AlertHistory:
     def check_available(self) -> None:
         connection = None
@@ -93,61 +120,49 @@ class AlertHistory:
     def list_events(
         self,
         before: int | None = None,
+        unit_id: str | None = None,
         limit: int = PAGE_SIZE,
     ) -> tuple[list[dict], str | None]:
         connection = None
         try:
             connection = get_connection()
             with connection.cursor() as cursor:
+                where_parts = ["source = %s"]
+                params: list[object] = [SOURCE]
+
+                if unit_id is not None:
+                    where_parts.append("unit_id = %s")
+                    params.append(unit_id)
                 if before is not None:
-                    cursor.execute(
-                        """
-                        SELECT
-                            sequence_id,
-                            event_id,
-                            unit_id,
-                            channel,
-                            engineering_unit,
-                            level,
-                            threshold,
-                            first_value,
-                            peak_value,
-                            last_value,
-                            measured_at,
-                            last_measured_at,
-                            acknowledged_at
-                        FROM live_alert_notifications
-                        WHERE source = %s
-                          AND sequence_id < %s
-                        ORDER BY sequence_id DESC
-                        LIMIT %s
-                        """,
-                        (SOURCE, before, limit + 1),
-                    )
-                else:
-                    cursor.execute(
-                        """
-                        SELECT
-                            sequence_id,
-                            event_id,
-                            unit_id,
-                            channel,
-                            engineering_unit,
-                            level,
-                            threshold,
-                            first_value,
-                            peak_value,
-                            last_value,
-                            measured_at,
-                            last_measured_at,
-                            acknowledged_at
-                        FROM live_alert_notifications
-                        WHERE source = %s
-                        ORDER BY sequence_id DESC
-                        LIMIT %s
-                        """,
-                        (SOURCE, limit + 1),
-                    )
+                    where_parts.append("sequence_id < %s")
+                    params.append(before)
+
+                params.append(limit + 1)
+                where_sql = " AND ".join(where_parts)
+
+                cursor.execute(
+                    f"""
+                    SELECT
+                        sequence_id,
+                        event_id,
+                        unit_id,
+                        channel,
+                        engineering_unit,
+                        level,
+                        threshold,
+                        first_value,
+                        peak_value,
+                        last_value,
+                        measured_at,
+                        last_measured_at,
+                        acknowledged_at
+                    FROM live_alert_notifications
+                    WHERE {where_sql}
+                    ORDER BY sequence_id DESC
+                    LIMIT %s
+                    """,
+                    tuple(params),
+                )
                 rows = cursor.fetchall()
         finally:
             if connection is not None:
@@ -162,6 +177,8 @@ class AlertHistory:
         events = [
             {
                 "id": row["event_id"],
+                "unit_id": row["unit_id"],
+                "channel": row["channel"],
                 "level": row["level"],
                 "threshold": int(row["threshold"]),
                 "first_value": float(row["first_value"]),
@@ -203,8 +220,8 @@ class AlertHistory:
                     (
                         event.id,
                         SOURCE,
-                        UNIT_ID,
-                        CHANNEL,
+                        event.unit_id,
+                        event.channel,
                         ENGINEERING_UNIT,
                         event.level,
                         event.threshold,
@@ -288,6 +305,9 @@ class AlertDemo:
         self.task: asyncio.Task[None] | None = None
         self.reading: DemoReading | None = None
         self.highest: ActiveAlert | None = None
+        self.current_unit_id: str = DEFAULT_UNIT_ID
+        self.current_channel: str = DEFAULT_CHANNEL
+        self.rotation_idx: int = 0
         self.revision = 0
         self.run_failed = False
 
@@ -295,7 +315,29 @@ class AlertDemo:
     def running(self) -> bool:
         return self.task is not None and not self.task.done()
 
-    async def snapshot(self, before: int | None = None) -> dict:
+    def _pick_run_targets(
+        self, requested_unit_id: str | None
+    ) -> tuple[tuple[str, str], tuple[str, str]]:
+        if requested_unit_id is not None:
+            channels = ALL_UNIT_CHANNELS[requested_unit_id]
+            ch1 = random.choice(channels)
+            ch2 = random.choice(channels)
+            return (requested_unit_id, ch1), (requested_unit_id, ch2)
+
+        # Mode Semua Unit: otomatis bergilir lintas 3 PLTA (7 unit)
+        u1 = UNIT_ROTATION[self.rotation_idx % len(UNIT_ROTATION)]
+        u2 = UNIT_ROTATION[(self.rotation_idx + 2) % len(UNIT_ROTATION)]
+        self.rotation_idx = (self.rotation_idx + 1) % len(UNIT_ROTATION)
+        return (
+            (u1, random.choice(ALL_UNIT_CHANNELS[u1])),
+            (u2, random.choice(ALL_UNIT_CHANNELS[u2])),
+        )
+
+    async def snapshot(
+        self,
+        before: int | None = None,
+        unit_id: str | None = None,
+    ) -> dict:
         history_unavailable = False
         events: list[dict] = []
         next_before: str | None = None
@@ -304,6 +346,7 @@ class AlertDemo:
             events, next_before = await asyncio.to_thread(
                 self.history.list_events,
                 before,
+                unit_id,
                 PAGE_SIZE,
             )
         except DB_ERRORS as error:
@@ -317,8 +360,8 @@ class AlertDemo:
             "running": self.running,
             "history_unavailable": history_unavailable,
             "run_failed": self.run_failed,
-            "unit_id": UNIT_ID,
-            "channel": CHANNEL,
+            "unit_id": self.current_unit_id,
+            "channel": self.current_channel,
             "unit": ENGINEERING_UNIT,
             "reading": asdict(self.reading) if self.reading else None,
             "events": events,
@@ -341,6 +384,8 @@ class AlertDemo:
             return
 
         self.reading = reading
+        self.current_unit_id = reading.unit_id
+        self.current_channel = reading.channel
         self.revision += 1
         value = reading.value
         if value < ALERT_THRESHOLD:
@@ -349,7 +394,11 @@ class AlertDemo:
             return
 
         level: Level = "trip" if value >= TRIP_THRESHOLD else "alert"
-        if self.highest is not None:
+        if (
+            self.highest is not None
+            and self.highest.unit_id == reading.unit_id
+            and self.highest.channel == reading.channel
+        ):
             if self.highest.level == level or self.highest.level == "trip":
                 self.highest.last_value = value
                 self.highest.peak_value = max(self.highest.peak_value, value)
@@ -359,6 +408,8 @@ class AlertDemo:
 
         event = ActiveAlert(
             id=str(uuid4()),
+            unit_id=reading.unit_id,
+            channel=reading.channel,
             level=level,
             threshold=TRIP_THRESHOLD if level == "trip" else ALERT_THRESHOLD,
             first_value=value,
@@ -370,7 +421,7 @@ class AlertDemo:
         await asyncio.to_thread(self.history.insert_event, event)
         self.highest = event
 
-    async def start(self) -> None:
+    async def start(self, requested_unit_id: str | None = None) -> None:
         if self.running:
             raise HTTPException(409, "Simulasi masih berjalan.")
 
@@ -383,13 +434,34 @@ class AlertDemo:
                 "Riwayat notifikasi tidak tersedia. Periksa MariaDB dan tabel live_alert_notifications.",
             ) from None
 
+        (alert_unit, alert_ch), (trip_unit, trip_ch) = self._pick_run_targets(
+            requested_unit_id
+        )
+        steps: list[tuple[float, str, str]] = [
+            (DEMO_VALUES[0], alert_unit, alert_ch),
+            (DEMO_VALUES[1], alert_unit, alert_ch),
+            (DEMO_VALUES[2], alert_unit, alert_ch),
+            (DEMO_VALUES[3], trip_unit, trip_ch),
+            (DEMO_VALUES[4], trip_unit, trip_ch),
+        ]
+
         self.reading = None
         self.highest = None
+        self.current_unit_id = alert_unit
+        self.current_channel = alert_ch
         self.run_failed = False
         self.revision += 1
 
         try:
-            await self.evaluate(DemoReading(DEMO_VALUES[0], datetime.now(timezone.utc)))
+            first_val, first_unit, first_ch = steps[0]
+            await self.evaluate(
+                DemoReading(
+                    value=first_val,
+                    measured_at=datetime.now(timezone.utc),
+                    unit_id=first_unit,
+                    channel=first_ch,
+                )
+            )
         except DB_ERRORS as error:
             self.run_failed = True
             self.revision += 1
@@ -399,13 +471,20 @@ class AlertDemo:
                 "Gagal menulis simulasi ke database.",
             ) from None
 
-        self.task = asyncio.create_task(self.run())
+        self.task = asyncio.create_task(self.run(steps[1:]))
 
-    async def run(self) -> None:
+    async def run(self, remaining_steps: list[tuple[float, str, str]]) -> None:
         try:
-            for value in DEMO_VALUES[1:]:
+            for value, u_id, ch in remaining_steps:
                 await asyncio.sleep(DEMO_INTERVAL_SECONDS)
-                await self.evaluate(DemoReading(value, datetime.now(timezone.utc)))
+                await self.evaluate(
+                    DemoReading(
+                        value=value,
+                        measured_at=datetime.now(timezone.utc),
+                        unit_id=u_id,
+                        channel=ch,
+                    )
+                )
         except DB_ERRORS as error:
             self.run_failed = True
             logger.error("Simulasi berhenti karena penulisan DB gagal: %s", error)
@@ -461,19 +540,30 @@ async def get_demo(
     request: Request,
     response: Response,
     before: str | None = Query(default=None),
+    unit_id: str | None = Query(default=None),
 ):
     response.headers["Cache-Control"] = "no-store"
     before_seq = _parse_before(before)
+    unit_filter = _normalize_unit_filter(unit_id)
     demo = getattr(request.app.state, "live_alert_demo", None)
-    return await demo.snapshot(before=before_seq) if demo else {"enabled": False}
+    return (
+        await demo.snapshot(before=before_seq, unit_id=unit_filter)
+        if demo
+        else {"enabled": False}
+    )
 
 
 @router.post("/start")
-async def start_demo(request: Request, response: Response):
+async def start_demo(
+    request: Request,
+    response: Response,
+    unit_id: str | None = Query(default=None),
+):
     response.headers["Cache-Control"] = "no-store"
+    unit_filter = _normalize_unit_filter(unit_id)
     demo = require_demo(request)
-    await demo.start()
-    return await demo.snapshot()
+    await demo.start(requested_unit_id=unit_filter)
+    return await demo.snapshot(unit_id=unit_filter)
 
 
 @router.post("/{event_id}/ack")
@@ -482,9 +572,11 @@ async def acknowledge_demo_alert(
     request: Request,
     response: Response,
     before: str | None = Query(default=None),
+    unit_id: str | None = Query(default=None),
 ):
     response.headers["Cache-Control"] = "no-store"
     before_seq = _parse_before(before)
+    unit_filter = _normalize_unit_filter(unit_id)
     demo = require_demo(request)
     await demo.acknowledge(event_id)
-    return await demo.snapshot(before=before_seq)
+    return await demo.snapshot(before=before_seq, unit_id=unit_filter)
